@@ -2,22 +2,21 @@
 import { ref, onMounted } from 'vue'
 import { useWallet } from './composables/useWallet'
 import {
-  MapPin,
-  Camera,
-  Coins,
-  ArrowRight,
-  RefreshCw,
-  ExternalLink,
+  Compass,
+  PlusCircle,
+  Clock,
   CheckCircle2,
   AlertCircle,
-  Clock,
-  Layers,
+  Coins,
+  MapPin,
+  Camera,
+  RefreshCw,
+  ExternalLink,
+  ChevronRight,
   Sparkles,
   Zap,
   Cpu,
-  ChevronRight,
-  Shield,
-  Eye,
+  Search,
   Check
 } from 'lucide-vue-next'
 
@@ -38,17 +37,18 @@ interface Task {
   refund_tx_sig?: string
 }
 
-const activeTab = ref<'do' | 'post'>('do')
+const currentView = ref<'feed' | 'create'>('feed')
 const tasks = ref<Task[]>([])
 const selectedTask = ref<Task | null>(null)
 const loading = ref(false)
+const searchQuery = ref('')
 
-// Verification Stepper State
+// Verification State
 const isSubmitting = ref(false)
 const verificationResult = ref<any>(null)
 const currentStep = ref<number>(0)
 
-// Post Task Form State
+// Post Form
 const postTitle = ref('')
 const postInstruction = ref('')
 const postTarget = ref('')
@@ -61,6 +61,9 @@ const fetchTasks = async () => {
   try {
     const res = await fetch('/api/tasks')
     tasks.value = await res.json()
+    if (!selectedTask.value && tasks.value.length > 0) {
+      selectedTask.value = tasks.value[0]
+    }
   } catch (err) {
     console.error(err)
   } finally {
@@ -86,6 +89,7 @@ const claimTask = async () => {
     const data = await res.json()
     if (res.ok) {
       selectedTask.value.status = 'CLAIMED'
+      fetchTasks()
     } else {
       alert(data.detail || 'Could not claim task')
     }
@@ -200,6 +204,7 @@ const createBounty = async () => {
     const data = await res.json()
     postCreatedResult.value = data
     fetchTasks()
+    currentView.value = 'feed'
   } catch (e) {
     console.error(e)
   } finally {
@@ -214,98 +219,155 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#08090D] bg-grid-pattern text-slate-100 flex flex-col items-center justify-start selection:bg-purple-600 selection:text-white">
+  <div class="h-screen w-screen flex bg-[#0A0C11] text-[#E2E8F0] overflow-hidden select-none">
     
-    <!-- Top Modern Web3 Navigation Bar -->
-    <header class="w-full border-b border-slate-800/80 bg-[#0C0E14]/90 backdrop-blur-md sticky top-0 z-40 px-4 py-3">
-      <div class="max-w-6xl mx-auto flex items-center justify-between">
+    <!-- 1. LEFT SIDEBAR (ElevenLabs Style Clean Navigation) -->
+    <aside class="w-64 bg-[#07080B] border-r border-[#1B1E29] flex flex-col justify-between shrink-0">
+      
+      <!-- Brand & Top Sections -->
+      <div class="p-4 space-y-6">
         
-        <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-500 to-teal-400 p-[1px] shadow-lg shadow-purple-500/20">
-            <div class="w-full h-full bg-[#0E1017] rounded-[11px] flex items-center justify-center">
-              <Zap class="w-5 h-5 text-teal-400" />
+        <!-- App Wordmark -->
+        <div class="flex items-center gap-3 px-2">
+          <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-600 via-indigo-500 to-teal-400 p-[1px] flex items-center justify-center">
+            <div class="w-full h-full bg-[#0E1017] rounded-[7px] flex items-center justify-center">
+              <Zap class="w-4 h-4 text-teal-400" />
             </div>
           </div>
           <div>
-            <div class="flex items-center gap-2">
-              <span class="font-extrabold text-lg tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">BountyBlink</span>
-              <span class="px-2 py-0.5 text-[10px] font-mono font-bold tracking-wider uppercase rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/30">
-                Solana Devnet
+            <div class="font-extrabold text-sm tracking-tight text-white flex items-center gap-1.5">
+              <span>BountyBlink</span>
+              <span class="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">DEVNET</span>
+            </div>
+            <p class="text-[10px] text-slate-500 font-mono">Autonomous Physical Escrow</p>
+          </div>
+        </div>
+
+        <!-- Navigation Menu -->
+        <nav class="space-y-1">
+          <button 
+            @click="currentView = 'feed'"
+            class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all"
+            :class="currentView === 'feed' ? 'bg-[#181B26] text-white shadow-sm border border-[#262C3E]' : 'text-slate-400 hover:text-white hover:bg-[#12141C]'"
+          >
+            <Compass class="w-4 h-4 text-teal-400" />
+            <span>Active Bounties</span>
+          </button>
+
+          <button 
+            @click="currentView = 'create'"
+            class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all"
+            :class="currentView === 'create' ? 'bg-[#181B26] text-white shadow-sm border border-[#262C3E]' : 'text-slate-400 hover:text-white hover:bg-[#12141C]'"
+          >
+            <PlusCircle class="w-4 h-4 text-purple-400" />
+            <span>Create Bounty</span>
+          </button>
+        </nav>
+
+      </div>
+
+      <!-- Bottom Profile & Status -->
+      <div class="p-4 border-t border-[#1B1E29] space-y-3 bg-[#0A0C11]">
+        
+        <div class="flex items-center justify-between text-xs font-mono">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></span>
+            <span class="text-slate-400 text-[11px]">{{ publicKey.slice(0, 4) }}...{{ publicKey.slice(-4) }}</span>
+          </div>
+          <div class="text-teal-400 font-bold flex items-center gap-1">
+            <Coins class="w-3.5 h-3.5 text-purple-400" />
+            <span>{{ balance.toFixed(2) }} SOL</span>
+          </div>
+        </div>
+
+        <button 
+          @click="resetDemo"
+          class="w-full py-1.5 px-3 rounded-lg bg-[#141722] hover:bg-[#1C2030] border border-[#232738] text-[11px] font-mono text-slate-300 transition-colors flex items-center justify-center gap-1.5"
+        >
+          <RefreshCw class="w-3 h-3 text-purple-400" :class="loading ? 'animate-spin' : ''" />
+          <span>Reset Demo State</span>
+        </button>
+
+      </div>
+
+    </aside>
+
+    <!-- 2. MAIN WORKSPACE (2-COLUMN HIGH DENSITY SAAS VIEW) -->
+    <main class="flex-1 flex overflow-hidden">
+      
+      <!-- COLUMN A: TASK FEED / LIST (380px fixed width) -->
+      <section class="w-96 border-r border-[#1B1E29] bg-[#0C0E14] flex flex-col shrink-0">
+        
+        <!-- Search & Filter Header -->
+        <div class="p-4 border-b border-[#1B1E29] space-y-3">
+          <div class="flex items-center justify-between">
+            <h1 class="font-bold text-sm text-white">Physical Work Orders</h1>
+            <span class="text-[10px] font-mono text-slate-500">{{ tasks.length }} available</span>
+          </div>
+
+          <!-- Search Input -->
+          <div class="relative">
+            <Search class="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+            <input 
+              v-model="searchQuery"
+              placeholder="Search by location, keyword..."
+              class="w-full pl-8 pr-3 py-1.5 rounded-lg bg-[#141722] border border-[#202534] text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+            />
+          </div>
+        </div>
+
+        <!-- Task List Items -->
+        <div class="flex-1 overflow-y-auto divide-y divide-[#171A24]">
+          
+          <div 
+            v-for="task in tasks" 
+            :key="task.id"
+            @click="selectTask(task)"
+            class="p-4 cursor-pointer transition-colors relative"
+            :class="selectedTask?.id === task.id ? 'bg-[#151824] border-l-2 border-purple-500' : 'hover:bg-[#10121A]'"
+          >
+            <div class="flex justify-between items-start mb-1">
+              <span class="text-[10px] font-mono text-slate-500 uppercase">#{{ task.id.slice(0, 6) }}</span>
+              <span class="font-mono font-bold text-xs text-teal-400">{{ task.reward_sol }} SOL</span>
+            </div>
+
+            <h3 class="font-semibold text-xs text-slate-100 line-clamp-1 mb-1">{{ task.title }}</h3>
+            <p class="text-[11px] text-slate-400 line-clamp-2 leading-relaxed mb-2.5">{{ task.instruction }}</p>
+
+            <div class="flex items-center justify-between text-[10px] font-mono text-slate-500">
+              <span class="flex items-center gap-1"><MapPin class="w-3 h-3 text-purple-400" /> {{ task.latitude.toFixed(2) }}, {{ task.longitude.toFixed(2) }}</span>
+              <span 
+                class="px-1.5 py-0.2 rounded font-bold uppercase"
+                :class="{
+                  'text-purple-400 bg-purple-500/10': task.status === 'OPEN',
+                  'text-amber-400 bg-amber-500/10': task.status === 'CLAIMED',
+                  'text-teal-400 bg-teal-500/10': task.status === 'PAID',
+                  'text-rose-400 bg-rose-500/10': task.status === 'REJECTED',
+                  'text-slate-500 bg-slate-800': task.status === 'REFUNDED'
+                }"
+              >
+                {{ task.status }}
               </span>
             </div>
-            <p class="text-[11px] text-slate-400 font-mono hidden sm:block">AI-to-Human Physical Task Escrow</p>
-          </div>
-        </div>
-
-        <div class="flex items-center gap-3">
-          <!-- Ephemeral Wallet Status Chip -->
-          <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#141722] border border-slate-800 text-xs shadow-inner">
-            <div class="w-2 h-2 rounded-full bg-teal-400 shadow-[0_0_8px_#14F195]"></div>
-            <span class="font-mono text-slate-300 hidden md:inline">{{ publicKey.slice(0, 4) }}...{{ publicKey.slice(-4) }}</span>
-            <span class="text-slate-600 hidden md:inline">|</span>
-            <div class="flex items-center gap-1 font-mono font-bold text-teal-300">
-              <Coins class="w-3.5 h-3.5 text-purple-400" />
-              <span>{{ balance.toFixed(2) }} SOL</span>
-            </div>
           </div>
 
-          <button 
-            @click="resetDemo"
-            class="px-3 py-1.5 rounded-lg bg-[#141722] hover:bg-[#1A1E2C] border border-slate-800 text-xs font-mono text-slate-300 hover:text-white transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
-            title="Reset to default seed bounties"
-          >
-            <RefreshCw class="w-3.5 h-3.5 text-purple-400" :class="loading ? 'animate-spin' : ''" />
-            <span class="hidden sm:inline">Reset</span>
-          </button>
         </div>
 
-      </div>
-    </header>
+      </section>
 
-    <!-- Main Container Layout (Modern Desktop Responsive View with Centered Focus) -->
-    <main class="w-full max-w-4xl px-4 py-6 md:py-8 flex flex-col items-center flex-1">
-      
-      <!-- Segmented Tab Navigation Bar (Magic UI Glass Pill) -->
-      <div class="p-1 rounded-2xl bg-[#11131B] border border-slate-800/90 flex gap-1 shadow-2xl mb-6 w-full max-w-md">
-        <button 
-          @click="activeTab = 'do'"
-          class="flex-1 py-2.5 px-4 rounded-xl text-xs font-mono font-semibold tracking-wide flex items-center justify-center gap-2 transition-all"
-          :class="activeTab === 'do' ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/30' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'"
-        >
-          <Layers class="w-4 h-4" />
-          <span>Fulfill Bounties</span>
-        </button>
-
-        <button 
-          @click="activeTab = 'post'"
-          class="flex-1 py-2.5 px-4 rounded-xl text-xs font-mono font-semibold tracking-wide flex items-center justify-center gap-2 transition-all"
-          :class="activeTab === 'post' ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/30' : 'text-slate-400 hover:text-white hover:bg-slate-800/50'"
-        >
-          <Sparkles class="w-4 h-4" />
-          <span>Create Bounty</span>
-        </button>
-      </div>
-
-      <!-- ================= TAB 1: DO TASKS ================= -->
-      <section v-if="activeTab === 'do'" class="w-full max-w-2xl space-y-4">
+      <!-- COLUMN B: DETAIL & INTERACTION CANVAS -->
+      <section class="flex-1 bg-[#090A0F] overflow-y-auto p-6 md:p-8 flex flex-col items-center">
         
-        <!-- State A: Task Detail View & Live Verification -->
-        <div v-if="selectedTask" class="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+        <!-- View 1: Task Inspection & Autonomous Verification -->
+        <div v-if="currentView === 'feed' && selectedTask" class="w-full max-w-2xl space-y-6">
           
-          <button 
-            @click="selectedTask = null" 
-            class="text-xs font-mono text-purple-400 hover:text-purple-300 flex items-center gap-1.5 transition-colors"
-          >
-            ← Return to Bounty Feed
-          </button>
-
-          <!-- Magic UI Bento Card for Task -->
-          <div class="p-6 rounded-2xl bg-[#11131B] border border-slate-800 shadow-2xl relative overflow-hidden magic-glow">
+          <!-- Top Order Header Card -->
+          <div class="p-6 rounded-2xl bg-[#11131C] border border-[#1E2232] shadow-xl space-y-4">
             
-            <div class="flex justify-between items-start border-b border-slate-800/80 pb-4 mb-4">
+            <div class="flex justify-between items-start border-b border-[#1E2232] pb-4">
               <div>
-                <div class="flex items-center gap-2">
-                  <span class="text-[10px] font-mono uppercase tracking-widest text-slate-500">ID: {{ selectedTask.id.slice(0, 8) }}</span>
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="text-xs font-mono text-slate-500 uppercase tracking-wider">Work Order #{{ selectedTask.id.slice(0, 8) }}</span>
                   <span 
                     class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border"
                     :class="{
@@ -319,108 +381,98 @@ onMounted(() => {
                     {{ selectedTask.status }}
                   </span>
                 </div>
-                <h2 class="text-xl font-bold text-white mt-1.5 leading-tight">{{ selectedTask.title }}</h2>
+                <h2 class="text-xl font-bold text-white">{{ selectedTask.title }}</h2>
               </div>
 
               <div class="text-right">
-                <span class="text-[10px] font-mono uppercase text-slate-400">Escrow Reward</span>
-                <div class="text-xl font-mono font-black text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-emerald-400">
-                  {{ selectedTask.reward_sol }} SOL
-                </div>
+                <span class="text-[10px] font-mono text-slate-500 uppercase block">Escrow Bounty</span>
+                <span class="text-xl font-mono font-black text-teal-400">{{ selectedTask.reward_sol }} SOL</span>
               </div>
             </div>
 
-            <!-- Task Operational Specs -->
-            <div class="space-y-3 text-sm text-slate-300">
-              <div class="p-3.5 rounded-xl bg-[#161822] border border-slate-800/60">
-                <div class="text-xs font-mono text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                  <Shield class="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Physical Instruction</span>
-                </div>
+            <!-- Physical Task Specifications -->
+            <div class="grid grid-cols-2 gap-3 text-xs">
+              <div class="p-3.5 rounded-xl bg-[#161824] border border-[#202538] space-y-1">
+                <span class="text-[10px] font-mono uppercase text-slate-400 block font-semibold">Physical Instruction</span>
                 <p class="text-slate-200 text-xs leading-relaxed">{{ selectedTask.instruction }}</p>
               </div>
 
-              <div class="p-3.5 rounded-xl bg-[#161822] border border-slate-800/60">
-                <div class="text-xs font-mono text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                  <Eye class="w-3.5 h-3.5 text-teal-400" />
-                  <span>Target Visual Cues (Gemini Vision)</span>
-                </div>
+              <div class="p-3.5 rounded-xl bg-[#161824] border border-[#202538] space-y-1">
+                <span class="text-[10px] font-mono uppercase text-teal-400 block font-semibold">Target Visual Criteria</span>
                 <p class="text-slate-200 text-xs leading-relaxed">{{ selectedTask.target_description }}</p>
-              </div>
-
-              <div class="flex items-center gap-4 text-xs font-mono text-slate-400 pt-1">
-                <span class="flex items-center gap-1"><MapPin class="w-3.5 h-3.5 text-purple-400" /> Lat {{ selectedTask.latitude.toFixed(4) }}, Lon {{ selectedTask.longitude.toFixed(4) }}</span>
-                <span class="flex items-center gap-1"><Clock class="w-3.5 h-3.5 text-slate-500" /> 10m lock</span>
               </div>
             </div>
 
-            <!-- Claim Button -->
-            <div v-if="selectedTask.status === 'OPEN'" class="mt-6">
+            <!-- Geolocation Spec Strip -->
+            <div class="flex items-center gap-4 text-xs font-mono text-slate-400 pt-1">
+              <span class="flex items-center gap-1.5"><MapPin class="w-3.5 h-3.5 text-purple-400" /> Target Lat {{ selectedTask.latitude.toFixed(4) }}, Lon {{ selectedTask.longitude.toFixed(4) }}</span>
+              <span class="flex items-center gap-1.5"><Clock class="w-3.5 h-3.5 text-slate-500" /> 10m Lease Lock</span>
+            </div>
+
+            <!-- Action 1: Claim Task -->
+            <div v-if="selectedTask.status === 'OPEN'" class="pt-2">
               <button 
                 @click="claimTask"
-                class="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-teal-500 hover:from-purple-500 hover:to-teal-400 text-white font-mono font-bold text-sm tracking-wide uppercase transition-all shadow-lg shadow-purple-600/30 flex items-center justify-center gap-2 active:scale-98 shimmer-btn"
+                class="w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-mono font-bold text-xs uppercase tracking-wider transition-all shadow-lg shadow-purple-600/20 flex items-center justify-center gap-2"
               >
-                <span>Claim Bounty & Lock Escrow</span>
-                <ArrowRight class="w-4 h-4" />
+                <span>Claim Exclusive Lease & Lock 0.01 SOL</span>
+                <ChevronRight class="w-4 h-4" />
               </button>
             </div>
 
-            <!-- Submission Area: Camera Capture & Presets -->
-            <div v-else-if="selectedTask.status === 'CLAIMED' && !isSubmitting && !verificationResult" class="mt-6 space-y-4">
+            <!-- Action 2: Evidence Submission Presets & Camera -->
+            <div v-else-if="selectedTask.status === 'CLAIMED' && !isSubmitting && !verificationResult" class="pt-2 space-y-3">
               
-              <div class="p-3.5 rounded-xl bg-purple-950/20 border border-purple-500/20 text-xs text-purple-200">
+              <div class="p-3 rounded-xl bg-purple-950/20 border border-purple-500/20 text-xs text-purple-200">
                 <p class="font-bold flex items-center gap-1.5 mb-1">
                   <Cpu class="w-3.5 h-3.5 text-teal-400" />
-                  Autonomous Verification Ready
+                  Autonomous Verification Engine
                 </p>
-                <p class="text-purple-300/80 leading-relaxed text-[11px]">
-                  Submit evidence using the live camera or test fixtures to verify the physical ground truth on Solana Devnet:
+                <p class="text-purple-300/80 text-[11px] leading-relaxed">
+                  Verify the physical ground truth on Solana Devnet using judge presets or upload live evidence:
                 </p>
               </div>
 
-              <!-- Two Judge Testing Presets (Modernized Web3 Buttons) -->
+              <!-- Two Judge Testing Presets Required by Spec -->
               <div class="grid grid-cols-2 gap-3">
                 <button 
                   @click="submitEvidence('VALID')"
-                  class="p-4 rounded-xl bg-[#141A24] border border-teal-500/30 hover:border-teal-400 hover:bg-teal-500/10 transition-all text-left shadow-lg group"
+                  class="p-4 rounded-xl bg-[#141A24] border border-teal-500/30 hover:border-teal-400 hover:bg-teal-500/10 transition-all text-left group"
                 >
-                  <div class="text-[10px] font-mono font-bold uppercase text-teal-400 tracking-wider">Preset Fixture 1</div>
+                  <div class="text-[10px] font-mono font-bold uppercase text-teal-400">Preset Fixture 1</div>
                   <div class="font-bold text-xs text-white group-hover:text-teal-300 mt-0.5">Test: Valid Photo</div>
                   <div class="text-[10px] text-slate-400 mt-1">Passes GPS + Vision ➔ Auto Payout</div>
                 </button>
 
                 <button 
                   @click="submitEvidence('FAKE')"
-                  class="p-4 rounded-xl bg-[#1C141C] border border-rose-500/30 hover:border-rose-400 hover:bg-rose-500/10 transition-all text-left shadow-lg group"
+                  class="p-4 rounded-xl bg-[#1C141C] border border-rose-500/30 hover:border-rose-400 hover:bg-rose-500/10 transition-all text-left group"
                 >
-                  <div class="text-[10px] font-mono font-bold uppercase text-rose-400 tracking-wider">Preset Fixture 2</div>
+                  <div class="text-[10px] font-mono font-bold uppercase text-rose-400">Preset Fixture 2</div>
                   <div class="font-bold text-xs text-white group-hover:text-rose-300 mt-0.5">Test: Fake Photo</div>
                   <div class="text-[10px] text-slate-400 mt-1">Fails Vision ➔ Refund Trigger</div>
                 </button>
               </div>
 
-              <!-- Native Camera Upload Card -->
-              <label class="w-full py-4 rounded-xl border border-dashed border-slate-700 bg-[#141722]/50 hover:bg-[#141722] hover:border-purple-500 flex flex-col items-center justify-center cursor-pointer transition-all text-xs font-mono text-slate-300 group">
-                <Camera class="w-6 h-6 text-purple-400 group-hover:scale-110 transition-transform mb-1.5" />
-                <span>Snap / Upload Real Photo</span>
-                <span class="text-[10px] text-slate-500 mt-0.5">Inspects EXIF GPS + Gemini 2.5 Flash Vision</span>
+              <!-- Live File Upload / Camera Input -->
+              <label class="w-full py-3.5 rounded-xl border border-dashed border-[#282E42] bg-[#12141E] hover:border-purple-500 flex flex-col items-center justify-center cursor-pointer transition-colors text-xs font-mono text-slate-300">
+                <Camera class="w-5 h-5 text-purple-400 mb-1" />
+                <span>Snap / Upload Real Camera Evidence</span>
+                <span class="text-[10px] text-slate-500">Evaluates EXIF GPS + Gemini 2.5 Flash Multimodal Vision</span>
                 <input type="file" accept="image/*" capture="environment" @change="handleFileUpload" class="hidden" />
               </label>
 
             </div>
 
-            <!-- Live Verification Stepper (Modern Glowing Pipeline) -->
-            <div v-if="isSubmitting" class="mt-6 p-5 rounded-xl bg-[#141724] border border-indigo-500/30 space-y-4">
+            <!-- Verification Pipeline Stepper -->
+            <div v-if="isSubmitting" class="p-4 rounded-xl bg-[#141724] border border-indigo-500/30 space-y-3">
               <div class="font-mono text-xs uppercase tracking-wider text-slate-400 border-b border-slate-800 pb-2 flex items-center justify-between">
-                <span class="flex items-center gap-1.5">
-                  <Cpu class="w-4 h-4 text-purple-400" />
-                  Autonomous Pipeline
-                </span>
-                <span class="text-teal-400 animate-pulse font-bold">Verifying...</span>
+                <span>Autonomous Verifier</span>
+                <span class="text-teal-400 animate-pulse font-bold">Processing pipeline...</span>
               </div>
 
-              <div class="space-y-3 text-xs font-mono">
-                <div class="flex items-center gap-3 transition-colors" :class="currentStep >= 1 ? 'text-white' : 'text-slate-600'">
+              <div class="space-y-2 text-xs font-mono">
+                <div class="flex items-center gap-3" :class="currentStep >= 1 ? 'text-white' : 'text-slate-600'">
                   <div class="w-5 h-5 rounded-full flex items-center justify-center text-[10px]" :class="currentStep > 1 ? 'bg-teal-500/20 text-teal-400 border border-teal-500/40' : 'bg-slate-800 text-slate-400'">
                     <Check v-if="currentStep > 1" class="w-3.5 h-3.5" />
                     <span v-else>1</span>
@@ -428,34 +480,34 @@ onMounted(() => {
                   <span>Tier 0: File Intake & Perceptual Hash Integrity</span>
                 </div>
 
-                <div class="flex items-center gap-3 transition-colors" :class="currentStep >= 2 ? 'text-white' : 'text-slate-600'">
+                <div class="flex items-center gap-3" :class="currentStep >= 2 ? 'text-white' : 'text-slate-600'">
                   <div class="w-5 h-5 rounded-full flex items-center justify-center text-[10px]" :class="currentStep > 2 ? 'bg-teal-500/20 text-teal-400 border border-teal-500/40' : 'bg-slate-800 text-slate-400'">
                     <Check v-if="currentStep > 2" class="w-3.5 h-3.5" />
                     <span v-else>2</span>
                   </div>
-                  <span>Tier 1: Geofence Validation (Haversine &lt;= 150m)</span>
+                  <span>Tier 1: Geofence Haversine Check (&lt;= 150m)</span>
                 </div>
 
-                <div class="flex items-center gap-3 transition-colors" :class="currentStep >= 3 ? 'text-white' : 'text-slate-600'">
+                <div class="flex items-center gap-3" :class="currentStep >= 3 ? 'text-white' : 'text-slate-600'">
                   <div class="w-5 h-5 rounded-full flex items-center justify-center text-[10px]" :class="currentStep > 3 ? 'bg-teal-500/20 text-teal-400 border border-teal-500/40' : 'bg-slate-800 text-slate-400'">
                     <Check v-if="currentStep > 3" class="w-3.5 h-3.5" />
                     <span v-else>3</span>
                   </div>
-                  <span>Tier 2: Gemini 2.5 Flash Multimodal Vision</span>
+                  <span>Tier 2: Gemini 2.5 Flash Multimodal Scene Verification</span>
                 </div>
 
-                <div class="flex items-center gap-3 transition-colors" :class="currentStep >= 4 ? 'text-white' : 'text-slate-600'">
+                <div class="flex items-center gap-3" :class="currentStep >= 4 ? 'text-white' : 'text-slate-600'">
                   <div class="w-5 h-5 rounded-full flex items-center justify-center text-[10px]" :class="currentStep >= 4 ? 'bg-teal-500/20 text-teal-400 border border-teal-500/40' : 'bg-slate-800 text-slate-400'">
                     <Check v-if="currentStep >= 4" class="w-3.5 h-3.5" />
                     <span v-else>4</span>
                   </div>
-                  <span>Tier 3: On-Chain Solana Devnet Settlement</span>
+                  <span>Tier 3: Solana Devnet On-Chain Settlement</span>
                 </div>
               </div>
             </div>
 
-            <!-- Verification Final Result Panel -->
-            <div v-if="verificationResult" class="mt-6 p-5 rounded-xl border shadow-xl" :class="verificationResult.status === 'PAID' ? 'bg-teal-950/20 border-teal-500/40' : 'bg-rose-950/20 border-rose-500/40'">
+            <!-- Verification Verdict -->
+            <div v-if="verificationResult" class="p-5 rounded-xl border shadow-xl" :class="verificationResult.status === 'PAID' ? 'bg-teal-950/20 border-teal-500/40' : 'bg-rose-950/20 border-rose-500/40'">
               
               <div class="flex items-center gap-2 font-mono text-xs font-bold uppercase mb-2" :class="verificationResult.status === 'PAID' ? 'text-teal-400' : 'text-rose-400'">
                 <CheckCircle2 v-if="verificationResult.status === 'PAID'" class="w-5 h-5" />
@@ -467,33 +519,29 @@ onMounted(() => {
                 {{ verificationResult.verification.reason }}
               </p>
 
-              <!-- Solana Explorer Link -->
               <div v-if="verificationResult.payout_tx_sig" class="p-3 rounded-lg bg-[#0C0E14] border border-slate-800 text-xs font-mono mb-4">
-                <span class="text-[10px] text-slate-500 uppercase block">Solana Devnet Signature</span>
+                <span class="text-[10px] text-slate-500 uppercase block">Solana Devnet Transaction</span>
                 <a 
                   :href="verificationResult.explorer_url" 
                   target="_blank" 
-                  class="text-teal-400 hover:text-teal-300 hover:underline flex items-center gap-1.5 font-bold mt-1 break-all"
+                  class="text-teal-400 hover:underline flex items-center gap-1.5 font-bold mt-1 break-all"
                 >
-                  <span>{{ verificationResult.payout_tx_sig.slice(0, 24) }}...</span>
+                  <span>{{ verificationResult.payout_tx_sig }}</span>
                   <ExternalLink class="w-3.5 h-3.5 shrink-0" />
                 </a>
               </div>
 
-              <!-- Refund Button for Rejected Task -->
               <div v-if="verificationResult.status === 'REJECTED' && selectedTask.status !== 'REFUNDED'">
                 <button 
                   @click="triggerRefund"
-                  class="w-full py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-mono text-xs font-bold uppercase tracking-wider transition-colors shadow-md flex items-center justify-center gap-2"
+                  class="w-full py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-mono text-xs font-bold uppercase tracking-wider transition-colors"
                 >
-                  <RefreshCw class="w-3.5 h-3.5 text-rose-400" />
-                  <span>Refund Deposit (0.01 SOL) to Poster</span>
+                  Refund 0.01 SOL Escrow to Poster
                 </button>
               </div>
 
-              <div v-if="selectedTask.status === 'REFUNDED'" class="p-3 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono text-slate-400 flex items-center gap-2">
-                <CheckCircle2 class="w-4 h-4 text-slate-500" />
-                <span>Escrow refunded back to task creator.</span>
+              <div v-if="selectedTask.status === 'REFUNDED'" class="p-3 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono text-slate-400">
+                Deposit refunded back to task creator.
               </div>
 
             </div>
@@ -502,159 +550,82 @@ onMounted(() => {
 
         </div>
 
-        <!-- State B: Modern Web3 Task Feed Grid -->
-        <div v-else class="space-y-4">
-          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-            <span class="font-mono text-xs text-slate-400 uppercase tracking-wider flex items-center gap-2">
-              <span class="w-2 h-2 rounded-full bg-purple-500"></span>
-              Available Physical Bounties ({{ tasks.length }})
-            </span>
-            <span class="text-[11px] font-mono text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded-full border border-teal-500/20">
-              Escrow Guaranteed
-            </span>
-          </div>
-
-          <!-- Bento Grid of Tasks -->
-          <div class="grid grid-cols-1 gap-3.5">
-            <div 
-              v-for="task in tasks" 
-              :key="task.id"
-              @click="selectTask(task)"
-              class="p-5 rounded-2xl bg-[#11131B] border border-slate-800/90 hover:border-purple-500/50 hover:bg-[#141724] cursor-pointer transition-all shadow-xl hover:shadow-purple-500/10 space-y-3 group relative overflow-hidden"
-            >
-              <div class="flex justify-between items-start">
-                <div class="space-y-1">
-                  <div class="flex items-center gap-2">
-                    <span class="text-[10px] font-mono uppercase text-slate-500">Task #{{ task.id.slice(0, 6) }}</span>
-                    <span 
-                      class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border"
-                      :class="{
-                        'bg-purple-500/10 border-purple-500/30 text-purple-400': task.status === 'OPEN',
-                        'bg-amber-500/10 border-amber-500/30 text-amber-400': task.status === 'CLAIMED',
-                        'bg-teal-500/10 border-teal-500/30 text-teal-400': task.status === 'PAID',
-                        'bg-rose-500/10 border-rose-500/30 text-rose-400': task.status === 'REJECTED',
-                        'bg-slate-800 border-slate-700 text-slate-400': task.status === 'REFUNDED'
-                      }"
-                    >
-                      {{ task.status }}
-                    </span>
-                  </div>
-                  <h3 class="font-bold text-base text-white group-hover:text-purple-300 transition-colors leading-snug">{{ task.title }}</h3>
-                </div>
-
-                <div class="text-right shrink-0">
-                  <span class="text-[10px] font-mono uppercase text-slate-500 block">Reward</span>
-                  <span class="font-mono font-black text-sm text-teal-400">{{ task.reward_sol }} SOL</span>
-                </div>
-              </div>
-
-              <p class="text-xs text-slate-400 line-clamp-2 leading-relaxed">{{ task.instruction }}</p>
-
-              <div class="flex items-center justify-between pt-2 border-t border-slate-800/80 text-[11px] font-mono text-slate-500">
-                <span class="flex items-center gap-1.5"><MapPin class="w-3.5 h-3.5 text-purple-400" /> Lat {{ task.latitude.toFixed(2) }}, Lon {{ task.longitude.toFixed(2) }}</span>
-                <span class="flex items-center gap-1 text-slate-400 group-hover:text-teal-400 transition-colors">
-                  <span>Inspect</span>
-                  <ChevronRight class="w-3.5 h-3.5" />
-                </span>
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-      </section>
-
-      <!-- ================= TAB 2: POST TASK ================= -->
-      <section v-if="activeTab === 'post'" class="w-full max-w-xl space-y-5 animate-in fade-in zoom-in-95 duration-200">
-        
-        <div class="p-6 rounded-2xl bg-[#11131B] border border-slate-800 shadow-2xl space-y-5 magic-glow">
+        <!-- View 2: Create Bounty Form -->
+        <div v-else-if="currentView === 'create'" class="w-full max-w-xl space-y-6">
           
-          <div class="border-b border-slate-800/80 pb-3">
-            <h2 class="text-lg font-bold text-white flex items-center gap-2">
-              <Sparkles class="w-5 h-5 text-purple-400" />
-              <span>Deploy Autonomous Physical Bounty</span>
-            </h2>
-            <p class="text-xs text-slate-400 font-mono mt-0.5">Locks 0.01 SOL into Devnet escrow vault</p>
-          </div>
+          <div class="p-6 rounded-2xl bg-[#11131C] border border-[#1E2232] shadow-xl space-y-5">
+            
+            <div class="border-b border-[#1E2232] pb-4">
+              <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                <Sparkles class="w-5 h-5 text-purple-400" />
+                <span>Deploy Autonomous Physical Bounty</span>
+              </h2>
+              <p class="text-xs text-slate-400 font-mono mt-0.5">Locks 0.01 SOL into Devnet escrow vault</p>
+            </div>
 
-          <!-- Quick Templates -->
-          <div class="space-y-2">
-            <span class="text-[10px] font-mono uppercase text-slate-400 tracking-wider">Quick Task Templates</span>
-            <div class="grid grid-cols-2 gap-2.5">
+            <!-- Quick Task Templates -->
+            <div class="space-y-2">
+              <span class="text-[10px] font-mono uppercase text-slate-400 tracking-wider">Quick Templates</span>
+              <div class="grid grid-cols-2 gap-2.5">
+                <button 
+                  @click="applyPreset('EV Charger Availability Check', 'Photograph the screen and plug status of Allego charger #3.', 'Operational screen, intact cable connector, no error code')"
+                  class="p-3 rounded-xl border border-[#202538] bg-[#161824] hover:border-purple-500 text-left transition-all text-xs font-mono text-slate-300"
+                >
+                  + EV Station Status
+                </button>
+                <button 
+                  @click="applyPreset('Coffee Shop Hours Blackboard', 'Photograph the blackboard near the front door showing Sunday hours.', 'Chalkboard sign with readable opening hours text')"
+                  class="p-3 rounded-xl border border-[#202538] bg-[#161824] hover:border-purple-500 text-left transition-all text-xs font-mono text-slate-300"
+                >
+                  + Shop Open Verification
+                </button>
+              </div>
+            </div>
+
+            <!-- Form -->
+            <div class="space-y-3.5 text-xs font-mono">
+              <div>
+                <label class="block text-slate-400 uppercase text-[11px] mb-1">Task Title</label>
+                <input 
+                  v-model="postTitle"
+                  placeholder="e.g. Verify Alexanderplatz EV Charger" 
+                  class="w-full px-3.5 py-2.5 rounded-xl bg-[#161824] border border-[#202538] text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 text-xs"
+                />
+              </div>
+
+              <div>
+                <label class="block text-slate-400 uppercase text-[11px] mb-1">Physical Verification Instructions</label>
+                <textarea 
+                  v-model="postInstruction"
+                  rows="2"
+                  placeholder="Specific camera angle or physical detail to inspect..." 
+                  class="w-full px-3.5 py-2.5 rounded-xl bg-[#161824] border border-[#202538] text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 text-xs"
+                ></textarea>
+              </div>
+
+              <div>
+                <label class="block text-slate-400 uppercase text-[11px] mb-1">Target Description (Evaluated by Gemini Vision)</label>
+                <input 
+                  v-model="postTarget"
+                  placeholder="e.g. Green operational display, undamaged cable" 
+                  class="w-full px-3.5 py-2.5 rounded-xl bg-[#161824] border border-[#202538] text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 text-xs"
+                />
+              </div>
+
+              <div class="p-3.5 rounded-xl bg-[#161824] border border-[#202538] flex justify-between items-center">
+                <span class="text-slate-400">Escrow Locked Amount</span>
+                <span class="font-bold text-teal-400 text-sm">0.01 SOL</span>
+              </div>
+
               <button 
-                @click="applyPreset('EV Charger Availability Check', 'Photograph the screen and plug status of Allego charger #3.', 'Operational screen, intact cable connector, no error code')"
-                class="p-2.5 rounded-xl border border-slate-800 bg-[#161822] hover:border-purple-500 hover:bg-[#1A1E2C] text-left transition-all text-xs font-mono text-slate-300"
+                @click="createBounty"
+                class="w-full py-3.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-sm uppercase tracking-wider transition-all shadow-lg shadow-purple-600/20 flex items-center justify-center gap-2"
               >
-                + EV Station Status
-              </button>
-              <button 
-                @click="applyPreset('Coffee Shop Hours Blackboard', 'Photograph the blackboard near the front door showing Sunday hours.', 'Chalkboard sign with readable opening hours text')"
-                class="p-2.5 rounded-xl border border-slate-800 bg-[#161822] hover:border-purple-500 hover:bg-[#1A1E2C] text-left transition-all text-xs font-mono text-slate-300"
-              >
-                + Shop Open Verification
+                <span>Deposit & Post Bounty</span>
+                <ChevronRight class="w-4 h-4" />
               </button>
             </div>
-          </div>
 
-          <!-- Inputs -->
-          <div class="space-y-3.5 text-xs font-mono">
-            <div>
-              <label class="block text-slate-400 uppercase text-[11px] mb-1">Task Title</label>
-              <input 
-                v-model="postTitle"
-                placeholder="e.g. Verify Alexanderplatz EV Charger" 
-                class="w-full px-3.5 py-2.5 rounded-xl bg-[#161822] border border-slate-800 text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 text-xs"
-              />
-            </div>
-
-            <div>
-              <label class="block text-slate-400 uppercase text-[11px] mb-1">Physical Verification Instructions</label>
-              <textarea 
-                v-model="postInstruction"
-                rows="2"
-                placeholder="Specific camera angle or physical detail to inspect..." 
-                class="w-full px-3.5 py-2.5 rounded-xl bg-[#161822] border border-slate-800 text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 text-xs"
-              ></textarea>
-            </div>
-
-            <div>
-              <label class="block text-slate-400 uppercase text-[11px] mb-1">Target Description (Evaluated by Gemini Vision)</label>
-              <input 
-                v-model="postTarget"
-                placeholder="e.g. Green operational display, undamaged cable" 
-                class="w-full px-3.5 py-2.5 rounded-xl bg-[#161822] border border-slate-800 text-white placeholder-slate-600 focus:outline-none focus:border-purple-500 text-xs"
-              />
-            </div>
-
-            <div class="p-3.5 rounded-xl bg-[#161822] border border-slate-800 flex justify-between items-center">
-              <span class="text-slate-400">Escrow Locked Amount</span>
-              <span class="font-bold text-teal-400 text-sm">0.01 SOL</span>
-            </div>
-
-            <button 
-              @click="createBounty"
-              class="w-full py-3.5 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-teal-500 hover:from-purple-500 hover:to-teal-400 text-white font-bold text-sm uppercase tracking-wider transition-all shadow-lg shadow-purple-600/30 flex items-center justify-center gap-2 active:scale-98 shimmer-btn"
-            >
-              <span>Lock Escrow & Post Bounty</span>
-              <ArrowRight class="w-4 h-4" />
-            </button>
-          </div>
-
-          <!-- Created Result Proof -->
-          <div v-if="postCreatedResult" class="p-4 rounded-xl bg-teal-950/20 border border-teal-500/40 text-xs space-y-2">
-            <div class="flex items-center gap-2 font-mono font-bold text-teal-400">
-              <CheckCircle2 class="w-4 h-4" />
-              <span>Bounty Deployed & Escrow Funded</span>
-            </div>
-            <p class="text-slate-300 text-[11px]">Task is live for nearby workers on Solana Devnet.</p>
-            <a 
-              :href="postCreatedResult.explorer_url" 
-              target="_blank" 
-              class="text-teal-400 hover:underline font-mono text-[11px] flex items-center gap-1.5"
-            >
-              <span>View Escrow Lock: {{ postCreatedResult.fund_tx_sig.slice(0, 20) }}...</span>
-              <ExternalLink class="w-3.5 h-3.5" />
-            </a>
           </div>
 
         </div>
@@ -662,5 +633,6 @@ onMounted(() => {
       </section>
 
     </main>
+
   </div>
 </template>

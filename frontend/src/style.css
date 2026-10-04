@@ -2,22 +2,26 @@
 
 @layer base {
   :root {
-    --color-bg: #090A0F;
-    --color-surface: #12141C;
-    --color-surface-elevated: #181B26;
-    --color-border: #232738;
-    --color-border-glow: #3B82F6;
-    --color-accent-sol: #9945FF;
-    --color-accent-teal: #14F195;
-    --color-accent-orange: #FF6B00;
+    --bg-main: #0B0D13;
+    --bg-sidebar: #07080B;
+    --bg-card: #12141D;
+    --bg-card-hover: #181B26;
+    --border-subtle: #1E2230;
+    --border-accent: #2D3349;
+    --sol-purple: #9945FF;
+    --sol-teal: #14F195;
+    --sol-blue: #38BDF8;
   }
 
   body {
-    background-color: #08090D;
-    color: #F1F5F9;
+    background-color: var(--bg-main);
+    color: #E2E8F0;
     font-family: -apple-system, BlinkMacSystemFont, "Plus Jakarta Sans", "Inter", "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
-    overflow-x: hidden;
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    overflow: hidden;
   }
 }
 
@@ -26,47 +30,35 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Modern Web3 / Magic UI glow effects */
-.magic-glow {
-  position: relative;
+/* Custom modern scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
 }
-.magic-glow::before {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  background: linear-gradient(90deg, #9945FF, #14F195, #3B82F6);
-  border-radius: inherit;
-  z-index: -1;
-  opacity: 0.25;
-  transition: opacity 0.3s ease;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
-.magic-glow:hover::before {
-  opacity: 0.7;
+::-webkit-scrollbar-thumb {
+  background: #1E2333;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2D344B;
 }
 
-/* Shimmer animation */
-@keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+/* Premium micro-glow and borders */
+.app-card {
+  background: #12141D;
+  border: 1px solid #1E2230;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.app-card:hover {
+  border-color: #2D3349;
+  transform: translateY(-1px);
 }
 
-.shimmer-btn {
-  position: relative;
-  overflow: hidden;
-}
-.shimmer-btn::after {
-  content: '';
-  position: absolute;
-  top: 0; right: 0; bottom: 0; left: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
-  transform: translateX(-100%);
-  animation: shimmer 2.5s infinite;
-}
-
-/* Grid pattern background */
-.bg-grid-pattern {
-  background-size: 32px 32px;
-  background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+.active-nav-pill {
+  background: #191C28;
+  color: #FFFFFF;
+  border: 1px solid #282E42;
 }
