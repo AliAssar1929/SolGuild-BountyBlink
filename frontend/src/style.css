@@ -2,77 +2,90 @@
 
 @layer base {
   :root {
-    --bg-paper: #F6F3EC;
+    --bg-page: #F7F5F0;
     --bg-surface: #FFFFFF;
-    --text-ink: #14130F;
-    --text-muted: #6B675E;
-    --border-line: #DDD8CC;
-    --accent-orange: #E8590C;
-    --pass-green: #1F7A4D;
-    --fail-red: #B3261E;
-  }
-
-  .dark {
-    --bg-paper: #121210;
-    --bg-surface: #1B1B18;
-    --text-ink: #F5F2EB;
-    --text-muted: #9E9A90;
-    --border-line: #2E2D28;
-    --accent-orange: #F76707;
-    --pass-green: #2B8A3E;
-    --fail-red: #C92A2A;
+    --text-primary: #1A1A17;
+    --text-secondary: #5E5B53;
+    --border-hairline: #E3DFD6;
+    --signal-yellow: #FFD60A;
+    --pass-green: #1E7B4F;
+    --fail-red: #B42318;
   }
 
   body {
-    background-color: var(--bg-paper);
-    color: var(--text-ink);
-    font-family: -apple-system, BlinkMacSystemFont, "Geist Sans", "Inter", sans-serif;
+    background-color: var(--bg-page);
+    color: var(--text-primary);
+    font-family: "Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     margin: 0;
     padding: 0;
-    min-height: 100vh;
   }
 }
 
-.font-serif {
-  font-family: "Fraunces", Georgia, serif;
-}
-
 .font-mono {
-  font-family: "Geist Mono", "JetBrains Mono", monospace;
+  font-family: "Geist Mono", monospace;
   font-variant-numeric: tabular-nums;
 }
 
-/* Subtle border beam during active verification ONLY */
-@keyframes borderBeam {
+/* Restrained border beam for the active verification step ONLY */
+@keyframes stepBeam {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
 
-.border-beam-active {
+.step-beam-container {
   position: relative;
   overflow: hidden;
 }
 
-.border-beam-active::before {
+.step-beam-container::before {
   content: '';
   position: absolute;
   top: -50%;
   left: -50%;
   width: 200%;
   height: 200%;
-  background: conic-gradient(transparent, #E8590C 20deg, transparent 40deg);
-  animation: borderBeam 3s linear infinite;
+  background: conic-gradient(transparent, #FFD60A 20deg, transparent 40deg);
+  animation: stepBeam 2.5s linear infinite;
   z-index: 0;
 }
 
-.border-beam-inner {
+.step-beam-content {
   position: relative;
   z-index: 1;
-  background-color: var(--bg-surface);
+  background-color: #FFFFFF;
 }
 
-/* Utility classes */
-.ticket-edge {
-  border-bottom: 1px dashed var(--border-line);
+/* Maplibre custom pin styling */
+.custom-map-pin {
+  background: #FFFFFF;
+  color: #1A1A17;
+  border: 1px solid #E3DFD6;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-family: "Hanken Grotesk", sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  transition: all 0.15s ease-out;
+}
+
+.custom-map-pin.selected {
+  background: #FFD60A;
+  border-color: #1A1A17;
+  color: #1A1A17;
+  transform: scale(1.08);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
+  z-index: 10;
+}
+
+/* Hairline borders */
+.border-hairline {
+  border-color: #E3DFD6;
 }

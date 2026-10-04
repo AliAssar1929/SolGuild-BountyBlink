@@ -1,34 +1,26 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import confetti from 'canvas-confetti'
 import { useWallet } from './composables/useWallet'
-import TaskCard from './components/TaskCard.vue'
-import EscrowChip from './components/EscrowChip.vue'
-import StatusStamp from './components/StatusStamp.vue'
+import TaskRow from './components/TaskRow.vue'
+import StatusWord from './components/StatusWord.vue'
+import RewardLine from './components/RewardLine.vue'
+import VerificationSteps from './components/VerificationSteps.vue'
+import DemoToolsDrawer from './components/DemoToolsDrawer.vue'
+import MapCanvas from './components/MapCanvas.vue'
+import LandingPage from './components/LandingPage.vue'
 import TxLink from './components/TxLink.vue'
-import VerificationStepper from './components/VerificationStepper.vue'
-import ConfidenceRing from './components/ConfidenceRing.vue'
-import DemoDrawer from './components/DemoDrawer.vue'
 
 import {
-  Compass,
-  PlusCircle,
-  Clock,
-  MapPin,
+  ArrowLeft,
   Camera,
   Search,
-  Sun,
-  Moon,
-  ArrowRight,
-  RotateCcw,
   CheckCircle2,
   AlertCircle,
   FlaskConical,
-  Terminal,
-  Info
+  RotateCcw
 } from 'lucide-vue-next'
 
-const { publicKey, balance, initWallet } = useWallet()
+const { publicKey, balance, initWallet, fetchFaucet } = useWallet()
 
 interface Task {
   id: string
@@ -45,23 +37,22 @@ interface Task {
   refund_tx_sig?: string
 }
 
-// Navigation & Theme
+// Global View Navigation
+const showLanding = ref(false)
 const currentTab = ref<'feed' | 'post' | 'activity'>('feed')
-const isDark = ref(false)
 const showDemoDrawer = ref(false)
 
-// Feed & Filters
+// Tasks & Search
 const tasks = ref<Task[]>([])
 const selectedTask = ref<Task | null>(null)
 const loading = ref(false)
 const searchQuery = ref('')
-const filter = ref<'ALL' | 'OPEN' | 'NEAR'>('ALL')
+const filter = ref<'ALL' | 'OPEN'>('ALL')
 
-// Verification State
+// Claim & Verification Flow
 const isSubmitting = ref(false)
 const verificationResult = ref<any>(null)
 const currentStep = ref<number>(0)
-const terminalLogs = ref<string[]>([])
 
 // Post Task Form
 const postTitle = ref('')
@@ -71,20 +62,11 @@ const postLat = ref(52.5200)
 const postLon = ref(13.4050)
 const postCreatedResult = ref<any>(null)
 
-const toggleTheme = () => {
-  isDark.value = !isDark.value
-  if (isDark.value) {
-    document.documentElement.classList.add('dark')
-  } else {
-    document.documentElement.classList.remove('dark')
-  }
-}
-
-const filteredTasks = computed(() => {
-  return tasks.value.filter(t => {
-    const matchesSearch = t.title.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-                          t.instruction.toLowerCase().includes(searchQuery.value.toLowerCase())
-    if (!matchesSearch) return false
+const filteredTasks = computed<Task[]>(() => {
+  return tasks.value.filter((t: Task) => {
+    const matches = t.title.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+                    t.instruction.toLowerCase().includes(searchQuery.value.toLowerCase())
+    if (!matches) return false
     if (filter.value === 'OPEN') return t.status === 'OPEN'
     return true
   })
@@ -109,7 +91,6 @@ const selectTask = (task: Task) => {
   selectedTask.value = task
   verificationResult.value = null
   currentStep.value = 0
-  terminalLogs.value = []
 }
 
 const claimTask = async () => {
@@ -135,37 +116,19 @@ const claimTask = async () => {
   }
 }
 
-const addLog = (msg: string) => {
-  const timestamp = new Date().toISOString().split('T')[1].slice(0, 8)
-  terminalLogs.value.push(`[${timestamp}] ${msg}`)
-}
-
 const submitEvidence = async (fixtureType?: 'VALID' | 'FAKE', file?: File) => {
   if (!selectedTask.value) return
   showDemoDrawer.value = false
   isSubmitting.value = true
   currentStep.value = 1
-  terminalLogs.value = []
-
-  addLog('Initiating evidence intake...')
-  addLog('Computing SHA-256 and checking duplicate registry...')
 
   const formData = new FormData()
   formData.append('worker_address', publicKey.value)
   if (fixtureType) formData.append('fixture_type', fixtureType)
   if (file) formData.append('photo', file)
 
-  setTimeout(() => {
-    currentStep.value = 2
-    addLog('Tier 0 passed. Computing Haversine geofence distance...')
-    addLog(`Target pin: ${selectedTask.value?.latitude.toFixed(4)}, ${selectedTask.value?.longitude.toFixed(4)}`)
-  }, 600)
-
-  setTimeout(() => {
-    currentStep.value = 3
-    addLog('Tier 1 geofence verified. Invoking Gemini 2.5 Flash Vision API...')
-    addLog('Analyzing scene authenticity and structured criteria...')
-  }, 1200)
+  setTimeout(() => { currentStep.value = 2 }, 600)
+  setTimeout(() => { currentStep.value = 3 }, 1200)
 
   try {
     const res = await fetch(`/api/tasks/${selectedTask.value.id}/submit`, {
@@ -180,22 +143,11 @@ const submitEvidence = async (fixtureType?: 'VALID' | 'FAKE', file?: File) => {
         selectedTask.value.status = data.status
         selectedTask.value.payout_tx_sig = data.payout_tx_sig
       }
-      if (data.status === 'PAID') {
-        addLog(`Settlement confirmed on Solana Devnet. Tx: ${data.payout_tx_sig}`)
-        confetti({
-          particleCount: 40,
-          spread: 50,
-          origin: { y: 0.6 }
-        })
-      } else {
-        addLog(`Verification REJECTED. Reason: ${data.verification.reason}`)
-      }
       isSubmitting.value = false
       fetchTasks()
     }, 1800)
   } catch (err) {
     console.error(err)
-    addLog(`Pipeline error: ${err}`)
     isSubmitting.value = false
   }
 }
@@ -236,11 +188,18 @@ const resetDemo = async () => {
     selectedTask.value = null
     verificationResult.value = null
     fetchTasks()
+    showDemoDrawer.value = false
   } catch (e) {
     console.error(e)
   } finally {
     loading.value = false
   }
+}
+
+const applyPreset = (title: string, inst: string, target: string) => {
+  postTitle.value = title
+  postInstruction.value = inst
+  postTarget.value = target
 }
 
 const createBounty = async () => {
@@ -278,354 +237,313 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#F6F3EC] dark:bg-[#121210] text-[#14130F] dark:text-[#F5F2EB] flex flex-col font-sans transition-colors duration-150">
+  <!-- Landing page toggle -->
+  <LandingPage v-if="showLanding" @startApp="showLanding = false" />
+
+  <div v-else class="h-screen w-screen flex flex-col bg-[#F7F5F0] text-[#1A1A17] overflow-hidden">
     
-    <!-- DESKTOP & MOBILE TOP BAR -->
-    <header class="h-14 border-b border-[#DDD8CC] dark:border-[#2E2D28] bg-[#FFFFFF] dark:bg-[#181815] px-4 md:px-6 flex items-center justify-between sticky top-0 z-30">
+    <!-- TOP BAR (Desktop and Mobile) -->
+    <header class="h-14 bg-white border-b border-[#E3DFD6] px-4 md:px-6 flex items-center justify-between shrink-0 z-20">
       
-      <!-- Brand & Devnet Badge -->
-      <div class="flex items-center gap-4">
-        <div class="flex items-center gap-2">
-          <span class="font-serif font-bold text-lg tracking-tight">BountyBlink</span>
-          <span class="px-1.5 py-0.5 rounded-[4px] border border-[#DDD8CC] dark:border-[#2E2D28] text-[9px] font-mono uppercase tracking-wider font-semibold text-[#6B675E] dark:text-[#9E9A90]">
-            Devnet
-          </span>
+      <!-- Brand & Tabs -->
+      <div class="flex items-center gap-6">
+        <div class="flex items-center gap-2 cursor-pointer" @click="showLanding = true">
+          <span class="font-bold text-[17px] tracking-tight">BountyBlink</span>
+          <span class="text-[12px] text-[#5E5B53]">Devnet</span>
         </div>
 
-        <!-- Desktop Navigation Tabs -->
-        <nav class="hidden md:flex items-center gap-1 border-l border-[#DDD8CC] dark:border-[#2E2D28] pl-4">
+        <nav class="hidden md:flex items-center gap-5 text-[15px]">
           <button 
             @click="currentTab = 'feed'"
-            class="px-3 py-1.5 rounded-[4px] text-xs font-mono font-medium transition-colors"
-            :class="currentTab === 'feed' ? 'bg-[#F6F3EC] dark:bg-[#252520] text-[#14130F] dark:text-[#F5F2EB] font-bold' : 'text-[#6B675E] dark:text-[#9E9A90] hover:text-[#14130F]'"
+            class="font-medium transition-colors"
+            :class="currentTab === 'feed' ? 'text-[#1A1A17] font-semibold' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
           >
             Find tasks
           </button>
           <button 
             @click="currentTab = 'post'"
-            class="px-3 py-1.5 rounded-[4px] text-xs font-mono font-medium transition-colors"
-            :class="currentTab === 'post' ? 'bg-[#F6F3EC] dark:bg-[#252520] text-[#14130F] dark:text-[#F5F2EB] font-bold' : 'text-[#6B675E] dark:text-[#9E9A90] hover:text-[#14130F]'"
+            class="font-medium transition-colors"
+            :class="currentTab === 'post' ? 'text-[#1A1A17] font-semibold' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
           >
             Post a task
           </button>
           <button 
             @click="currentTab = 'activity'"
-            class="px-3 py-1.5 rounded-[4px] text-xs font-mono font-medium transition-colors"
-            :class="currentTab === 'activity' ? 'bg-[#F6F3EC] dark:bg-[#252520] text-[#14130F] dark:text-[#F5F2EB] font-bold' : 'text-[#6B675E] dark:text-[#9E9A90] hover:text-[#14130F]'"
+            class="font-medium transition-colors"
+            :class="currentTab === 'activity' ? 'text-[#1A1A17] font-semibold' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
           >
             My activity
           </button>
         </nav>
       </div>
 
-      <!-- Controls: Demo Drawer, Wallet, Theme -->
-      <div class="flex items-center gap-2.5">
-        
-        <!-- Judge Testing Fixtures Button -->
+      <!-- Controls: Demo tools & Wallet chip -->
+      <div class="flex items-center gap-3">
         <button 
           @click="showDemoDrawer = true"
-          class="px-2.5 py-1 rounded-[4px] border border-[#E8590C] text-[#E8590C] hover:bg-[#FDF8F5] dark:hover:bg-[#201712] text-xs font-mono font-semibold flex items-center gap-1.5 transition-colors"
+          class="h-8 px-3 rounded-[12px] bg-[#F7F5F0] hover:bg-[#EAE6DC] text-[#1A1A17] text-[13px] font-medium flex items-center gap-1.5 transition-colors"
         >
           <FlaskConical class="w-3.5 h-3.5" />
-          <span class="hidden sm:inline">Test Fixtures</span>
+          <span>Demo tools</span>
         </button>
 
-        <!-- Wallet Chip -->
-        <div class="flex items-center gap-2 px-2.5 py-1 rounded-[4px] border border-[#DDD8CC] dark:border-[#2E2D28] bg-[#F6F3EC] dark:bg-[#121210] text-xs font-mono">
-          <span class="w-1.5 h-1.5 rounded-full bg-[#1F7A4D]"></span>
-          <span class="text-[#6B675E] dark:text-[#9E9A90] hidden sm:inline">{{ publicKey.slice(0, 4) }}...{{ publicKey.slice(-4) }}</span>
-          <span class="font-bold text-[#14130F] dark:text-[#F5F2EB]">{{ balance.toFixed(2) }} SOL</span>
+        <div class="flex items-center gap-2 text-[13px]">
+          <span class="font-mono text-[#5E5B53] hidden sm:inline">{{ publicKey.slice(0, 4) }}...{{ publicKey.slice(-4) }}</span>
+          <span class="font-semibold text-[#1A1A17]">{{ balance.toFixed(2) }} SOL</span>
         </div>
-
-        <!-- Light/Dark Toggle -->
-        <button 
-          @click="toggleTheme" 
-          class="p-1.5 rounded-[4px] border border-[#DDD8CC] dark:border-[#2E2D28] text-[#6B675E] dark:text-[#9E9A90] hover:text-[#14130F] dark:hover:text-[#F5F2EB]"
-          title="Toggle theme"
-        >
-          <Sun v-if="isDark" class="w-4 h-4" />
-          <Moon v-else class="w-4 h-4" />
-        </button>
-
       </div>
 
     </header>
 
-    <!-- MAIN BODY CONTENT -->
-    <div class="flex-1 flex flex-col md:flex-row overflow-hidden pb-16 md:pb-0">
+    <!-- MAIN BODY -->
+    <div class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
       
-      <!-- ================= TAB 1: FIND TASKS (2-COLUMN DESKTOP, RESPONSIVE MOBILE) ================= -->
+      <!-- ================= TAB 1: FIND TASKS (MAP-FIRST APP) ================= -->
       <template v-if="currentTab === 'feed'">
         
-        <!-- COLUMN 1: Task Feed List (420px fixed on desktop) -->
-        <section class="w-full md:w-[420px] md:border-r border-[#DDD8CC] dark:border-[#2E2D28] bg-[#FFFFFF] dark:bg-[#181815] flex flex-col shrink-0 overflow-y-auto">
+        <!-- 400px Left Panel (Desktop List & Detail Replacement) -->
+        <section class="w-full md:w-[400px] h-1/2 md:h-full bg-white md:border-r border-[#E3DFD6] flex flex-col shrink-0 z-10 shadow-xs order-2 md:order-1">
           
-          <!-- Search & Filter Controls -->
-          <div class="p-4 border-b border-[#DDD8CC] dark:border-[#2E2D28] space-y-3 sticky top-0 bg-[#FFFFFF] dark:bg-[#181815] z-10">
+          <!-- DETAIL STATE IN LEFT PANEL -->
+          <div v-if="selectedTask" class="h-full flex flex-col justify-between overflow-y-auto text-left">
             
-            <div class="relative">
-              <Search class="w-3.5 h-3.5 text-[#6B675E] absolute left-3 top-2.5" />
-              <input 
-                v-model="searchQuery"
-                placeholder="Search physical work orders..." 
-                class="w-full pl-8 pr-3 py-1.5 text-xs bg-[#F6F3EC] dark:bg-[#121210] border border-[#DDD8CC] dark:border-[#2E2D28] rounded-[4px] text-[#14130F] dark:text-[#F5F2EB] placeholder-[#6B675E] focus:outline-none focus:border-[#14130F]"
-              />
+            <div class="p-5 space-y-4">
+              <!-- Back button -->
+              <button 
+                @click="selectedTask = null"
+                class="flex items-center gap-1 text-[13px] text-[#5E5B53] hover:text-[#1A1A17] font-medium"
+              >
+                <ArrowLeft class="w-4 h-4" />
+                <span>All tasks</span>
+              </button>
+
+              <!-- Task Title & Money line -->
+              <div class="space-y-1">
+                <h1 class="text-[20px] font-semibold text-[#1A1A17] leading-tight">
+                  {{ selectedTask.title }}
+                </h1>
+                <RewardLine :status="selectedTask.status" :amount="selectedTask.reward_sol" />
+              </div>
+
+              <!-- What to do & What photo should show -->
+              <div class="space-y-3 pt-2 text-[15px] leading-relaxed">
+                <div>
+                  <h4 class="font-medium text-[#1A1A17] text-[13px]">What to do</h4>
+                  <p class="text-[#5E5B53] text-[14px] mt-0.5">{{ selectedTask.instruction }}</p>
+                </div>
+
+                <div>
+                  <h4 class="font-medium text-[#1A1A17] text-[13px]">What the photo should show</h4>
+                  <p class="text-[#5E5B53] text-[14px] mt-0.5">{{ selectedTask.target_description }}</p>
+                </div>
+
+                <div class="pt-2 border-t border-[#E3DFD6] text-[13px] text-[#5E5B53] space-y-1">
+                  <div>Take the photo within 150 m of the pin.</div>
+                  <div>You have 10 minutes to submit after claiming.</div>
+                </div>
+              </div>
+
+              <!-- Checking steps when submitted -->
+              <div v-if="isSubmitting || verificationResult" class="pt-3 border-t border-[#E3DFD6]">
+                <h4 class="font-medium text-[#1A1A17] text-[13px] mb-2">Verification</h4>
+                <VerificationSteps 
+                  :currentStep="currentStep" 
+                  :status="verificationResult?.status"
+                  :txSig="verificationResult?.payout_tx_sig"
+                  :reason="verificationResult?.verification?.reason"
+                />
+              </div>
+
+              <!-- Result verdict -->
+              <div v-if="verificationResult" class="pt-2">
+                <div 
+                  class="p-3.5 rounded-[12px] text-[14px] space-y-1.5"
+                  :class="verificationResult.status === 'PAID' ? 'bg-[#EBF5EF] text-[#1E7B4F]' : 'bg-[#FAECEB] text-[#B42318]'"
+                >
+                  <div class="flex items-center gap-1.5 font-semibold">
+                    <CheckCircle2 v-if="verificationResult.status === 'PAID'" class="w-4 h-4" />
+                    <AlertCircle v-else class="w-4 h-4" />
+                    <span>{{ verificationResult.status === 'PAID' ? 'Paid' : 'Not approved' }}</span>
+                  </div>
+                  <p class="text-[13px] leading-snug">{{ verificationResult.verification.reason }}</p>
+                </div>
+
+                <div v-if="verificationResult.status === 'REJECTED' && selectedTask.status !== 'REFUNDED'" class="pt-2">
+                  <button 
+                    @click="triggerRefund"
+                    class="w-full py-2.5 rounded-[12px] bg-[#1A1A17] text-white text-[13px] font-medium"
+                  >
+                    Refund reward to poster
+                  </button>
+                </div>
+              </div>
+
             </div>
 
-            <div class="flex items-center gap-1.5 text-[11px] font-mono">
+            <!-- Sticky Bottom Action Button -->
+            <div class="p-4 border-t border-[#E3DFD6] bg-white sticky bottom-0">
+              
+              <!-- Claim Button -->
               <button 
-                @click="filter = 'ALL'"
-                class="px-2 py-0.5 rounded-[4px] border transition-colors"
-                :class="filter === 'ALL' ? 'border-[#14130F] dark:border-[#F5F2EB] bg-[#14130F] text-[#F6F3EC] dark:bg-[#F5F2EB] dark:text-[#14130F]' : 'border-[#DDD8CC] dark:border-[#2E2D28] text-[#6B675E]'"
+                v-if="selectedTask.status === 'OPEN'"
+                @click="claimTask"
+                class="w-full h-12 rounded-[12px] bg-[#FFD60A] hover:brightness-95 text-[#1A1A17] font-semibold text-[15px] transition-all flex items-center justify-center shadow-xs"
               >
-                All ({{ tasks.length }})
+                Claim this task
               </button>
+
+              <!-- Upload / Snap Button -->
+              <label 
+                v-else-if="selectedTask.status === 'CLAIMED' && !isSubmitting && !verificationResult"
+                class="w-full h-12 rounded-[12px] bg-[#FFD60A] hover:brightness-95 text-[#1A1A17] font-semibold text-[15px] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+              >
+                <Camera class="w-4 h-4" />
+                <span>Take or upload photo</span>
+                <input type="file" accept="image/*" capture="environment" @change="handleFileUpload" class="hidden" />
+              </label>
+
+              <!-- Reset / Pick another -->
               <button 
-                @click="filter = 'OPEN'"
-                class="px-2 py-0.5 rounded-[4px] border transition-colors"
-                :class="filter === 'OPEN' ? 'border-[#14130F] dark:border-[#F5F2EB] bg-[#14130F] text-[#F6F3EC] dark:bg-[#F5F2EB] dark:text-[#14130F]' : 'border-[#DDD8CC] dark:border-[#2E2D28] text-[#6B675E]'"
+                v-else-if="verificationResult"
+                @click="selectedTask = null"
+                class="w-full h-12 rounded-[12px] bg-[#F7F5F0] text-[#1A1A17] font-medium text-[15px] transition-all flex items-center justify-center"
               >
-                Open Bounties
+                Find another task
               </button>
+
             </div>
 
           </div>
 
-          <!-- Task Cards List -->
-          <div class="p-3 space-y-2.5">
-            <TaskCard 
-              v-for="task in filteredTasks"
-              :key="task.id"
-              :task="task"
-              :isSelected="selectedTask?.id === task.id"
-              @select="selectTask(task)"
-            />
+          <!-- LIST STATE IN LEFT PANEL -->
+          <div v-else class="h-full flex flex-col overflow-hidden text-left">
+            
+            <!-- Search & Filters -->
+            <div class="p-4 border-b border-[#E3DFD6] space-y-3 shrink-0">
+              <h2 class="text-[17px] font-semibold text-[#1A1A17]">Tasks near you</h2>
+              
+              <div class="relative">
+                <Search class="w-4 h-4 text-[#5E5B53] absolute left-3 top-2.5" />
+                <input 
+                  v-model="searchQuery"
+                  placeholder="Search tasks..." 
+                  class="w-full pl-9 pr-3 py-1.5 text-[15px] bg-[#F7F5F0] border border-[#E3DFD6] rounded-[8px] text-[#1A1A17] placeholder-[#5E5B53] focus:outline-none focus:border-[#1A1A17]"
+                />
+              </div>
+
+              <div class="flex items-center gap-2 text-[13px]">
+                <button 
+                  @click="filter = 'ALL'"
+                  class="px-2.5 py-1 rounded-[6px] font-medium"
+                  :class="filter === 'ALL' ? 'bg-[#1A1A17] text-white' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
+                >
+                  All ({{ tasks.length }})
+                </button>
+                <button 
+                  @click="filter = 'OPEN'"
+                  class="px-2.5 py-1 rounded-[6px] font-medium"
+                  :class="filter === 'OPEN' ? 'bg-[#1A1A17] text-white' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
+                >
+                  Open only
+                </button>
+              </div>
+            </div>
+
+            <!-- List rows -->
+            <div class="flex-1 overflow-y-auto divide-y divide-[#E3DFD6]">
+              <TaskRow 
+                v-for="task in (filteredTasks as any[])" 
+                :key="task.id"
+                :task="task"
+                :isSelected="Boolean(selectedTask && (selectedTask as any).id === task.id)"
+                @select="selectTask(task)"
+              />
+            </div>
+
           </div>
 
         </section>
 
-        <!-- COLUMN 2: Task Detail & Verification Stage (Desktop Full Right Column) -->
-        <main class="flex-1 bg-[#F6F3EC] dark:bg-[#121210] overflow-y-auto p-4 md:p-8 flex flex-col items-center">
-          
-          <div v-if="selectedTask" class="w-full max-w-2xl space-y-6">
-            
-            <!-- Map Preview Strip -->
-            <div class="w-full h-40 bg-[#EAE6DC] dark:bg-[#20201C] border border-[#DDD8CC] dark:border-[#2E2D28] rounded-[6px] relative overflow-hidden flex items-center justify-center text-xs font-mono text-[#6B675E] dark:text-[#9E9A90]">
-              <div class="text-center space-y-1">
-                <MapPin class="w-6 h-6 text-[#E8590C] mx-auto animate-bounce" />
-                <p class="font-bold text-[#14130F] dark:text-[#F5F2EB]">Target Pin: {{ selectedTask.latitude.toFixed(4) }}, {{ selectedTask.longitude.toFixed(4) }}</p>
-                <p class="text-[10px]">OpenStreetMap / Haversine 150m boundary</p>
-              </div>
-            </div>
-
-            <!-- Field Work-Order Detail Card -->
-            <article 
-              class="p-6 rounded-[6px] border bg-[#FFFFFF] dark:bg-[#181815] border-[#DDD8CC] dark:border-[#2E2D28] space-y-5 text-left transition-all"
-              :class="isSubmitting ? 'border-beam-active' : ''"
-            >
-              
-              <!-- Card Header -->
-              <div class="flex items-start justify-between border-b border-dashed border-[#DDD8CC] dark:border-[#2E2D28] pb-4">
-                <div>
-                  <div class="flex items-center gap-2 mb-1.5">
-                    <span class="font-mono text-[10px] uppercase text-[#6B675E] dark:text-[#9E9A90]">Order #{{ selectedTask.id.slice(0, 8) }}</span>
-                    <EscrowChip :status="selectedTask.status" :amount="selectedTask.reward_sol" />
-                  </div>
-                  <h1 class="font-serif text-xl font-bold text-[#14130F] dark:text-[#F5F2EB] leading-tight">
-                    {{ selectedTask.title }}
-                  </h1>
-                </div>
-
-                <div class="text-right">
-                  <span class="text-[10px] font-mono text-[#6B675E] dark:text-[#9E9A90] uppercase block">Bounty Settlement</span>
-                  <span class="font-mono font-bold text-lg text-[#E8590C]">
-                    {{ selectedTask.reward_sol.toFixed(2) }} SOL
-                  </span>
-                </div>
-              </div>
-
-              <!-- Specs Section -->
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                <div class="p-3.5 rounded-[4px] bg-[#F6F3EC] dark:bg-[#20201C] border border-[#DDD8CC] dark:border-[#2E2D28] space-y-1">
-                  <span class="text-[10px] font-mono font-bold uppercase text-[#6B675E] dark:text-[#9E9A90] block">Physical Work Instruction</span>
-                  <p class="text-[#14130F] dark:text-[#F5F2EB] leading-relaxed">{{ selectedTask.instruction }}</p>
-                </div>
-
-                <div class="p-3.5 rounded-[4px] bg-[#F6F3EC] dark:bg-[#20201C] border border-[#DDD8CC] dark:border-[#2E2D28] space-y-1">
-                  <span class="text-[10px] font-mono font-bold uppercase text-[#1F7A4D] dark:text-[#51CF66] block">Target Visual Cue (Gemini Vision)</span>
-                  <p class="text-[#14130F] dark:text-[#F5F2EB] leading-relaxed">{{ selectedTask.target_description }}</p>
-                </div>
-              </div>
-
-              <!-- Lease & Location Metadata -->
-              <div class="flex items-center justify-between text-[11px] font-mono text-[#6B675E] dark:text-[#9E9A90] pt-1">
-                <span class="flex items-center gap-1.5"><Clock class="w-3.5 h-3.5 text-[#E8590C]" /> 10-Minute Exclusive Claim Window</span>
-                <span>Best-Effort GPS &le; 150m</span>
-              </div>
-
-              <!-- Primary Action 1: Claim Task -->
-              <div v-if="selectedTask.status === 'OPEN'" class="pt-2">
-                <button 
-                  @click="claimTask"
-                  class="w-full py-3.5 rounded-[4px] bg-[#E8590C] hover:bg-[#D9480F] text-[#FFFFFF] font-mono font-bold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-2"
-                >
-                  <span>Claim Bounty (Lock 0.01 SOL)</span>
-                  <ArrowRight class="w-4 h-4" />
-                </button>
-              </div>
-
-              <!-- Primary Action 2: Evidence Submission -->
-              <div v-else-if="selectedTask.status === 'CLAIMED' && !isSubmitting && !verificationResult" class="pt-2 space-y-3">
-                
-                <div class="flex items-center justify-between p-3 rounded-[4px] bg-[#F6F3EC] dark:bg-[#20201C] border border-[#DDD8CC] dark:border-[#2E2D28] text-xs">
-                  <span class="font-mono text-[#14130F] dark:text-[#F5F2EB]">Bounty Claimed. Ready for ground evidence.</span>
-                  <button 
-                    @click="showDemoDrawer = true" 
-                    class="font-mono text-[11px] text-[#E8590C] hover:underline font-bold"
-                  >
-                    Open Test Fixtures
-                  </button>
-                </div>
-
-                <!-- Camera Upload Field -->
-                <label class="w-full py-4 rounded-[4px] border border-dashed border-[#14130F] dark:border-[#F5F2EB] bg-[#FFFFFF] dark:bg-[#181815] hover:bg-[#F6F3EC] dark:hover:bg-[#252520] flex flex-col items-center justify-center cursor-pointer transition-colors text-xs font-mono text-[#14130F] dark:text-[#F5F2EB]">
-                  <Camera class="w-5 h-5 text-[#E8590C] mb-1" />
-                  <span class="font-bold">Snap or Upload On-Site Evidence Photo</span>
-                  <span class="text-[10px] text-[#6B675E] dark:text-[#9E9A90] mt-0.5">Runs EXIF Geofence + Gemini 2.5 Flash Autonomous Verifier</span>
-                  <input type="file" accept="image/*" capture="environment" @change="handleFileUpload" class="hidden" />
-                </label>
-
-              </div>
-
-              <!-- Verification Stepper Progress -->
-              <div v-if="isSubmitting" class="pt-2 border-t border-[#DDD8CC] dark:border-[#2E2D28] space-y-3">
-                <span class="text-[11px] font-mono uppercase text-[#6B675E] dark:text-[#9E9A90] block">Autonomous Verification Stepper</span>
-                <VerificationStepper :currentStep="currentStep" />
-              </div>
-
-              <!-- Result Screen -->
-              <div v-if="verificationResult" class="pt-2 border-t border-[#DDD8CC] dark:border-[#2E2D28] space-y-4">
-                
-                <div class="flex items-center justify-between">
-                  <div class="flex items-center gap-2">
-                    <CheckCircle2 v-if="verificationResult.status === 'PAID'" class="w-5 h-5 text-[#1F7A4D]" />
-                    <AlertCircle v-else class="w-5 h-5 text-[#B3261E]" />
-                    <span class="font-bold text-sm" :class="verificationResult.status === 'PAID' ? 'text-[#1F7A4D]' : 'text-[#B3261E]'">
-                      {{ verificationResult.status === 'PAID' ? 'Verification Passed: Escrow Paid' : 'Verification Rejected' }}
-                    </span>
-                  </div>
-                  <ConfidenceRing :score="verificationResult.verification.confidence" />
-                </div>
-
-                <p class="text-xs text-[#6B675E] dark:text-[#9E9A90] leading-relaxed">
-                  {{ verificationResult.verification.reason }}
-                </p>
-
-                <!-- Transaction Link -->
-                <div v-if="verificationResult.payout_tx_sig" class="p-3 rounded-[4px] bg-[#F6F3EC] dark:bg-[#20201C] border border-[#DDD8CC] dark:border-[#2E2D28]">
-                  <TxLink :signature="verificationResult.payout_tx_sig" label="Settlement Transaction" />
-                </div>
-
-                <!-- Refund Trigger for Creator on Failure -->
-                <div v-if="verificationResult.status === 'REJECTED' && selectedTask.status !== 'REFUNDED'">
-                  <button 
-                    @click="triggerRefund"
-                    class="w-full py-2.5 rounded-[4px] bg-[#14130F] dark:bg-[#F5F2EB] text-[#F6F3EC] dark:text-[#14130F] font-mono text-xs font-bold uppercase tracking-wider hover:opacity-90 transition-opacity"
-                  >
-                    Refund 0.01 SOL to Task Poster
-                  </button>
-                </div>
-
-                <div v-if="selectedTask.status === 'REFUNDED'" class="text-xs font-mono text-[#6B675E] dark:text-[#9E9A90]">
-                  Escrow deposit has been refunded back to creator.
-                </div>
-
-              </div>
-
-            </article>
-
-            <!-- Desktop Terminal Log (Magic UI Terminal Requirement) -->
-            <div class="hidden md:block rounded-[6px] border border-[#DDD8CC] dark:border-[#2E2D28] bg-[#14130F] text-[#F6F3EC] font-mono text-xs p-4 text-left space-y-2">
-              <div class="flex items-center justify-between border-b border-[#2E2D28] pb-2 text-[10px] text-[#9E9A90]">
-                <div class="flex items-center gap-1.5">
-                  <Terminal class="w-3.5 h-3.5 text-[#E8590C]" />
-                  <span>DEVNET VERIFICATION LOG</span>
-                </div>
-                <span>Cluster: devnet</span>
-              </div>
-
-              <div class="h-28 overflow-y-auto space-y-1 text-[11px] text-[#DDD8CC]">
-                <div v-if="terminalLogs.length === 0" class="text-[#6B675E]">
-                  Awaiting evidence submission to stream verification tiers...
-                </div>
-                <div v-for="(log, i) in terminalLogs" :key="i" class="leading-snug">
-                  {{ log }}
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-          <!-- Empty Right Stage State -->
-          <div v-else class="text-center py-20 space-y-3">
-            <Info class="w-8 h-8 text-[#6B675E] mx-auto" />
-            <h2 class="font-serif text-lg font-bold">Select a work order from the feed</h2>
-            <p class="text-xs text-[#6B675E] max-w-sm">Inspect physical task requirements, escrow lock status, and location coordinates.</p>
-          </div>
-
+        <!-- Full-bleed Map Canvas -->
+        <main class="flex-1 h-1/2 md:h-full relative order-1 md:order-2">
+          <MapCanvas 
+            :tasks="tasks" 
+            :selectedTask="selectedTask" 
+            @selectTask="selectTask"
+          />
         </main>
 
       </template>
 
       <!-- ================= TAB 2: POST A TASK ================= -->
-      <section v-else-if="currentTab === 'post'" class="flex-1 p-6 md:p-12 overflow-y-auto flex justify-center">
+      <section v-else-if="currentTab === 'post'" class="flex-1 p-6 md:p-12 overflow-y-auto flex justify-center bg-[#F7F5F0]">
         
-        <div class="w-full max-w-xl p-6 rounded-[6px] border border-[#DDD8CC] dark:border-[#2E2D28] bg-[#FFFFFF] dark:bg-[#181815] space-y-5 text-left">
+        <div class="w-full max-w-lg bg-white p-6 md:p-8 rounded-[16px] border border-[#E3DFD6] shadow-xs space-y-6 text-left">
           
-          <div class="border-b border-[#DDD8CC] dark:border-[#2E2D28] pb-3">
-            <h2 class="font-serif text-lg font-bold text-[#14130F] dark:text-[#F5F2EB]">Post Physical Work Order</h2>
-            <p class="text-xs text-[#6B675E] dark:text-[#9E9A90] font-mono mt-0.5">Locks 0.01 SOL in Solana Devnet Escrow</p>
+          <div class="border-b border-[#E3DFD6] pb-3">
+            <h2 class="text-[20px] font-bold text-[#1A1A17]">Post a task</h2>
+            <p class="text-[14px] text-[#5E5B53]">Deposit 0.01 SOL into escrow. Payout releases upon photo verification.</p>
           </div>
 
-          <div class="space-y-3.5 text-xs font-mono">
+          <!-- Quick presets -->
+          <div class="space-y-2">
+            <label class="text-[13px] font-medium text-[#5E5B53]">Preset tasks</label>
+            <div class="grid grid-cols-2 gap-2">
+              <button 
+                @click="applyPreset('EV Charger Status Check', 'Check if charger #3 is working.', 'Operational screen, intact cable connector')"
+                class="p-2.5 text-left rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] hover:border-[#1A1A17] text-[13px]"
+              >
+                EV charger status
+              </button>
+              <button 
+                @click="applyPreset('Coffee Shop Hours Check', 'Photograph the opening hours chalkboard.', 'Chalkboard sign with clear hours')"
+                class="p-2.5 text-left rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] hover:border-[#1A1A17] text-[13px]"
+              >
+                Shop opening hours
+              </button>
+            </div>
+          </div>
+
+          <!-- Inputs -->
+          <div class="space-y-4 text-[15px]">
             <div>
-              <label class="block uppercase text-[11px] text-[#6B675E] dark:text-[#9E9A90] mb-1">Task Title</label>
+              <label class="block text-[13px] font-medium text-[#5E5B53] mb-1">Task title</label>
               <input 
                 v-model="postTitle"
-                placeholder="e.g. Verify Alexanderplatz EV Charger"
-                class="w-full p-2.5 rounded-[4px] bg-[#F6F3EC] dark:bg-[#121210] border border-[#DDD8CC] dark:border-[#2E2D28] text-[#14130F] dark:text-[#F5F2EB] focus:outline-none focus:border-[#E8590C]"
+                placeholder="e.g. Is the EV charger at Alexanderplatz working?"
+                class="w-full px-3.5 py-2.5 rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] focus:outline-none focus:border-[#1A1A17]"
               />
             </div>
 
             <div>
-              <label class="block uppercase text-[11px] text-[#6B675E] dark:text-[#9E9A90] mb-1">Worker Physical Instruction</label>
+              <label class="block text-[13px] font-medium text-[#5E5B53] mb-1">What to do</label>
               <textarea 
                 v-model="postInstruction"
                 rows="2"
-                placeholder="What physical perspective or detail must the photo show?"
-                class="w-full p-2.5 rounded-[4px] bg-[#F6F3EC] dark:bg-[#121210] border border-[#DDD8CC] dark:border-[#2E2D28] text-[#14130F] dark:text-[#F5F2EB] focus:outline-none focus:border-[#E8590C]"
+                placeholder="Specify the photo perspective..."
+                class="w-full px-3.5 py-2.5 rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] focus:outline-none focus:border-[#1A1A17]"
               ></textarea>
             </div>
 
             <div>
-              <label class="block uppercase text-[11px] text-[#6B675E] dark:text-[#9E9A90] mb-1">Target Description (Gemini Vision Criteria)</label>
+              <label class="block text-[13px] font-medium text-[#5E5B53] mb-1">What the photo should show</label>
               <input 
                 v-model="postTarget"
-                placeholder="e.g. Active screen, intact charging cable"
-                class="w-full p-2.5 rounded-[4px] bg-[#F6F3EC] dark:bg-[#121210] border border-[#DDD8CC] dark:border-[#2E2D28] text-[#14130F] dark:text-[#F5F2EB] focus:outline-none focus:border-[#E8590C]"
+                placeholder="e.g. Green operational display, undamaged cable"
+                class="w-full px-3.5 py-2.5 rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] focus:outline-none focus:border-[#1A1A17]"
               />
             </div>
 
-            <div class="p-3 rounded-[4px] bg-[#F6F3EC] dark:bg-[#20201C] border border-[#DDD8CC] dark:border-[#2E2D28] flex justify-between items-center">
-              <span class="text-[#6B675E] dark:text-[#9E9A90]">Escrow Bounty Lock</span>
-              <span class="font-bold text-[#E8590C] text-sm">0.01 SOL</span>
+            <div class="p-3 bg-[#F7F5F0] rounded-[8px] flex justify-between items-center text-[15px]">
+              <span class="text-[#5E5B53]">Deposit amount</span>
+              <span class="font-bold text-[#1A1A17]">0.01 SOL</span>
             </div>
 
             <button 
               @click="createBounty"
-              class="w-full py-3 rounded-[4px] bg-[#E8590C] hover:bg-[#D9480F] text-[#FFFFFF] font-bold text-xs uppercase tracking-wider transition-colors"
+              class="w-full h-12 rounded-[12px] bg-[#FFD60A] text-[#1A1A17] font-semibold text-[15px] hover:brightness-95 transition-all shadow-xs"
             >
-              Deposit & Publish Task
+              Fund and publish task
             </button>
           </div>
 
@@ -634,27 +552,27 @@ onMounted(() => {
       </section>
 
       <!-- ================= TAB 3: MY ACTIVITY ================= -->
-      <section v-else-if="currentTab === 'activity'" class="flex-1 p-6 md:p-12 overflow-y-auto flex justify-center">
+      <section v-else-if="currentTab === 'activity'" class="flex-1 p-6 md:p-12 overflow-y-auto flex justify-center bg-[#F7F5F0]">
         
-        <div class="w-full max-w-2xl p-6 rounded-[6px] border border-[#DDD8CC] dark:border-[#2E2D28] bg-[#FFFFFF] dark:bg-[#181815] space-y-4 text-left">
+        <div class="w-full max-w-xl bg-white p-6 md:p-8 rounded-[16px] border border-[#E3DFD6] shadow-xs space-y-4 text-left">
           
-          <div class="border-b border-[#DDD8CC] dark:border-[#2E2D28] pb-3 flex justify-between items-center">
-            <h2 class="font-serif text-lg font-bold">Activity & On-Chain Audit Log</h2>
-            <button @click="resetDemo" class="text-xs font-mono text-[#6B675E] hover:underline flex items-center gap-1">
-              <RotateCcw class="w-3 h-3" />
-              <span>Reset State</span>
+          <div class="flex justify-between items-center border-b border-[#E3DFD6] pb-3">
+            <h2 class="text-[20px] font-bold text-[#1A1A17]">My activity</h2>
+            <button @click="resetDemo" class="text-[13px] text-[#5E5B53] hover:text-[#1A1A17] flex items-center gap-1">
+              <RotateCcw class="w-3.5 h-3.5" />
+              <span>Reset</span>
             </button>
           </div>
 
-          <div class="divide-y divide-[#DDD8CC] dark:divide-[#2E2D28] text-xs font-mono">
-            <div v-for="t in tasks" :key="t.id" class="py-3 flex justify-between items-center">
+          <div class="divide-y divide-[#E3DFD6] text-[15px]">
+            <div v-for="t in (tasks as Task[])" :key="t.id" class="py-3.5 flex justify-between items-center">
               <div>
-                <span class="font-bold text-[#14130F] dark:text-[#F5F2EB]">{{ t.title }}</span>
-                <span class="text-[10px] text-[#6B675E] dark:text-[#9E9A90] block">#{{ t.id.slice(0, 8) }}</span>
+                <h4 class="font-medium text-[#1A1A17]">{{ t.title }}</h4>
+                <span class="text-[13px] text-[#5E5B53]">0.01 SOL</span>
               </div>
               <div class="text-right space-y-1">
-                <StatusStamp :status="t.status" />
-                <div v-if="t.payout_tx_sig" class="text-[10px]">
+                <StatusWord :status="t.status" />
+                <div v-if="t.payout_tx_sig" class="text-[12px]">
                   <TxLink :signature="t.payout_tx_sig" />
                 </div>
               </div>
@@ -667,41 +585,40 @@ onMounted(() => {
 
     </div>
 
-    <!-- MOBILE BOTTOM NAVIGATION (UNDER 768PX) -->
-    <nav class="md:hidden h-14 border-t border-[#DDD8CC] dark:border-[#2E2D28] bg-[#FFFFFF] dark:bg-[#181815] fixed bottom-0 inset-x-0 z-40 grid grid-cols-3">
+    <!-- Mobile Bottom Tab Bar -->
+    <nav class="md:hidden h-14 bg-white border-t border-[#E3DFD6] grid grid-cols-3 shrink-0 z-20">
       <button 
         @click="currentTab = 'feed'"
-        class="flex flex-col items-center justify-center font-mono text-[10px] uppercase transition-colors"
-        :class="currentTab === 'feed' ? 'text-[#E8590C] font-bold' : 'text-[#6B675E]'"
+        class="flex flex-col items-center justify-center text-[12px]"
+        :class="currentTab === 'feed' ? 'text-[#1A1A17] font-semibold' : 'text-[#5E5B53]'"
       >
-        <Compass class="w-4 h-4 mb-0.5" />
         <span>Find</span>
       </button>
 
       <button 
         @click="currentTab = 'post'"
-        class="flex flex-col items-center justify-center font-mono text-[10px] uppercase transition-colors"
-        :class="currentTab === 'post' ? 'text-[#E8590C] font-bold' : 'text-[#6B675E]'"
+        class="flex flex-col items-center justify-center text-[12px]"
+        :class="currentTab === 'post' ? 'text-[#1A1A17] font-semibold' : 'text-[#5E5B53]'"
       >
-        <PlusCircle class="w-4 h-4 mb-0.5" />
         <span>Post</span>
       </button>
 
       <button 
         @click="currentTab = 'activity'"
-        class="flex flex-col items-center justify-center font-mono text-[10px] uppercase transition-colors"
-        :class="currentTab === 'activity' ? 'text-[#E8590C] font-bold' : 'text-[#6B675E]'"
+        class="flex flex-col items-center justify-center text-[12px]"
+        :class="currentTab === 'activity' ? 'text-[#1A1A17] font-semibold' : 'text-[#5E5B53]'"
       >
-        <Clock class="w-4 h-4 mb-0.5" />
         <span>Activity</span>
       </button>
     </nav>
 
-    <!-- Judge Testing Fixtures Drawer Modal -->
-    <DemoDrawer 
+    <!-- Demo Tools Drawer -->
+    <DemoToolsDrawer 
       :isOpen="showDemoDrawer" 
       @close="showDemoDrawer = false" 
       @submitFixture="submitEvidence" 
+      @reset="resetDemo"
+      @faucet="fetchFaucet"
     />
 
   </div>
