@@ -2,63 +2,77 @@
 
 @layer base {
   :root {
-    --bg-main: #0B0D13;
-    --bg-sidebar: #07080B;
-    --bg-card: #12141D;
-    --bg-card-hover: #181B26;
-    --border-subtle: #1E2230;
-    --border-accent: #2D3349;
-    --sol-purple: #9945FF;
-    --sol-teal: #14F195;
-    --sol-blue: #38BDF8;
+    --bg-paper: #F6F3EC;
+    --bg-surface: #FFFFFF;
+    --text-ink: #14130F;
+    --text-muted: #6B675E;
+    --border-line: #DDD8CC;
+    --accent-orange: #E8590C;
+    --pass-green: #1F7A4D;
+    --fail-red: #B3261E;
+  }
+
+  .dark {
+    --bg-paper: #121210;
+    --bg-surface: #1B1B18;
+    --text-ink: #F5F2EB;
+    --text-muted: #9E9A90;
+    --border-line: #2E2D28;
+    --accent-orange: #F76707;
+    --pass-green: #2B8A3E;
+    --fail-red: #C92A2A;
   }
 
   body {
-    background-color: var(--bg-main);
-    color: #E2E8F0;
-    font-family: -apple-system, BlinkMacSystemFont, "Plus Jakarta Sans", "Inter", "Segoe UI", Roboto, sans-serif;
+    background-color: var(--bg-paper);
+    color: var(--text-ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Geist Sans", "Inter", sans-serif;
     -webkit-font-smoothing: antialiased;
     margin: 0;
     padding: 0;
-    height: 100vh;
-    overflow: hidden;
+    min-height: 100vh;
   }
 }
 
+.font-serif {
+  font-family: "Fraunces", Georgia, serif;
+}
+
 .font-mono {
-  font-family: "JetBrains Mono", "Geist Mono", monospace;
+  font-family: "Geist Mono", "JetBrains Mono", monospace;
   font-variant-numeric: tabular-nums;
 }
 
-/* Custom modern scrollbar */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #1E2333;
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #2D344B;
+/* Subtle border beam during active verification ONLY */
+@keyframes borderBeam {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
-/* Premium micro-glow and borders */
-.app-card {
-  background: #12141D;
-  border: 1px solid #1E2230;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.app-card:hover {
-  border-color: #2D3349;
-  transform: translateY(-1px);
+.border-beam-active {
+  position: relative;
+  overflow: hidden;
 }
 
-.active-nav-pill {
-  background: #191C28;
-  color: #FFFFFF;
-  border: 1px solid #282E42;
+.border-beam-active::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(transparent, #E8590C 20deg, transparent 40deg);
+  animation: borderBeam 3s linear infinite;
+  z-index: 0;
+}
+
+.border-beam-inner {
+  position: relative;
+  z-index: 1;
+  background-color: var(--bg-surface);
+}
+
+/* Utility classes */
+.ticket-edge {
+  border-bottom: 1px dashed var(--border-line);
 }
