@@ -13,6 +13,9 @@ import PostTaskForm from './components/PostTaskForm.vue'
 import TaskFilters from './components/TaskFilters.vue'
 import LocationPermissionCard from './components/LocationPermissionCard.vue'
 import WalletModal from './components/WalletModal.vue'
+import UserProfileModal from './components/UserProfileModal.vue'
+import EmptyState from './components/EmptyState.vue'
+import { useSolPrice } from './composables/useSolPrice'
 
 import {
   ArrowLeft,
@@ -22,7 +25,9 @@ import {
   AlertCircle,
   FlaskConical,
   RotateCcw,
-  Wallet
+  Wallet,
+  User,
+  ShieldCheck
 } from 'lucide-vue-next'
 
 const { 
@@ -34,8 +39,11 @@ const {
   initWallet, 
   connectPhantom, 
   fetchFaucet, 
+  refreshProfile, 
   disconnect 
 } = useWallet()
+
+const { getUsdValue } = useSolPrice()
 
 interface Task {
   id: string
@@ -67,11 +75,33 @@ const showLanding = ref(false)
 const currentTab = ref<'feed' | 'post' | 'activity'>('feed')
 const showDemoDrawer = ref(false)
 const showWalletModal = ref(false)
+const showProfileModal = ref(false)
 const showLocationPrompt = ref(true)
 
-// Activity Tab Filter
+// Post a task live sticky data
+const livePostData = ref<any>({
+  title: '',
+  category: 'Infrastructure',
+  placeName: '',
+  fullAddress: '',
+  city: 'Berlin',
+  country: 'Germany',
+  latitude: 52.5200,
+  longitude: 13.4050,
+  radiusMeters: 150,
+  photosRequired: 1,
+  finishWindowMinutes: 10,
+  rewardSol: 0.01,
+  instruction: '',
+  targetDescription: '',
+  forbiddenDescription: '',
+  referencePhotos: []
+})
+
+// Activity Tab Filter & Isolated Data
 const activityTab = ref<'ALL' | 'POSTED' | 'WORKING' | 'COMPLETED'>('ALL')
 const activitySelectedTask = ref<Task | null>(null)
+const userActivityData = ref<any>({ posted_tasks: [], claimed_tasks: [], submissions: [] })
 
 // Tasks & Filters
 const tasks = ref<Task[]>([])
@@ -88,6 +118,54 @@ const isSubmitting = ref(false)
 const verificationResult = ref<any>(null)
 const currentStep = ref<number>(0)
 
+// URL Hash Routing synchronization
+const syncRouteFromHash = () => {
+  const hash = window.location.hash.replace(/^#\/?/, '')
+  const parts = hash.split('/')
+  const section = parts[0]
+  if (section === 'post') {
+    currentTab.value = 'post'
+    selectedTask.value = null
+  } else if (section === 'activity') {
+    currentTab.value = 'activity'
+    selectedTask.value = null
+    fetchUserActivity()
+  } else if (section === 'profile') {
+    showProfileModal.value = true
+  } else if (section === 'tasks' && parts[1]) {
+    currentTab.value = 'feed'
+    const found = tasks.value.find(t => t.id === parts[1])
+    if (found) selectedTask.value = found
+  } else {
+    currentTab.value = 'feed'
+  }
+}
+
+const navigateTo = (tab: 'feed' | 'post' | 'activity', taskId?: string) => {
+  currentTab.value = tab
+  if (taskId) {
+    window.location.hash = `/tasks/${taskId}`
+  } else if (tab === 'feed') {
+    selectedTask.value = null
+    window.location.hash = '/tasks'
+  } else {
+    selectedTask.value = null
+    window.location.hash = `/${tab}`
+  }
+}
+
+const fetchUserActivity = async () => {
+  if (!publicKey.value) return
+  try {
+    const res = await fetch(`/api/user/${publicKey.value}/activity`)
+    if (res.ok) {
+      userActivityData.value = await res.json()
+    }
+  } catch (e) {
+    console.error('Error fetching user activity:', e)
+  }
+}
+
 const fetchTasks = async () => {
   loading.value = true
   try {
@@ -99,9 +177,7 @@ const fetchTasks = async () => {
 
     const res = await fetch(url)
     tasks.value = await res.json()
-    if (!selectedTask.value && tasks.value.length > 0) {
-      selectedTask.value = tasks.value[0]
-    }
+    // Do NOT auto-select tasks[0] by default to ensure feed overview is shown first
   } catch (err) {
     console.error(err)
   } finally {
@@ -113,6 +189,7 @@ const selectTask = (task: Task) => {
   selectedTask.value = task
   verificationResult.value = null
   currentStep.value = 0
+  window.location.hash = `/tasks/${task.id}`
 }
 
 const handleUseLocation = () => {
@@ -137,6 +214,12 @@ const handleSelectCity = (city: string) => {
 
 const claimTask = async () => {
   if (!selectedTask.value) return
+  
+  if (!userProfile.value?.is_email_verified) {
+    showProfileModal.value = true
+    return
+  }
+
   loading.value = true
   try {
     const res = await fetch(`/api/tasks/${selectedTask.value.id}/claim`, {
@@ -149,6 +232,9 @@ const claimTask = async () => {
       selectedTask.value.status = 'CLAIMED'
       fetchTasks()
     } else {
+      if (res.status === 403) {
+        showProfileModal.value = true
+      }
       alert(data.detail || 'Could not claim task')
     }
   } catch (e) {
@@ -270,9 +356,11 @@ const filteredActivityTasks = computed(() => {
   return tasks.value
 })
 
-onMounted(() => {
-  initWallet()
-  fetchTasks()
+onMounted(async () => {
+  await initWallet()
+  await fetchTasks()
+  syncRouteFromHash()
+  window.addEventListener('hashchange', syncRouteFromHash)
 })
 </script>
 
@@ -293,21 +381,21 @@ onMounted(() => {
 
         <nav class="hidden md:flex items-center gap-5 text-[15px]">
           <button 
-            @click="currentTab = 'feed'"
+            @click="navigateTo('feed')"
             class="font-medium transition-colors"
             :class="currentTab === 'feed' ? 'text-[#1A1A17] font-semibold' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
           >
             Find tasks
           </button>
           <button 
-            @click="currentTab = 'post'"
+            @click="navigateTo('post')"
             class="font-medium transition-colors"
             :class="currentTab === 'post' ? 'text-[#1A1A17] font-semibold' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
           >
             Post a task
           </button>
           <button 
-            @click="currentTab = 'activity'"
+            @click="navigateTo('activity')"
             class="font-medium transition-colors"
             :class="currentTab === 'activity' ? 'text-[#1A1A17] font-semibold' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
           >
@@ -316,14 +404,26 @@ onMounted(() => {
         </nav>
       </div>
 
-      <!-- Controls: Demo tools & Wallet Chip -->
-      <div class="flex items-center gap-3">
+      <!-- Controls: Demo tools, Profile trigger & Wallet Chip -->
+      <div class="flex items-center gap-2.5">
         <button 
           @click="showDemoDrawer = true"
           class="h-8 px-3 rounded-[12px] bg-[#F7F5F0] hover:bg-[#EAE6DC] text-[#1A1A17] text-[13px] font-medium flex items-center gap-1.5 transition-colors"
         >
           <FlaskConical class="w-3.5 h-3.5" />
           <span>Demo tools</span>
+        </button>
+
+        <button 
+          v-if="publicKey"
+          @click="showProfileModal = true"
+          class="h-8 px-2.5 rounded-[10px] bg-[#F7F5F0] hover:bg-[#EAE6DC] text-[#1A1A17] text-[13px] font-medium flex items-center gap-1.5 transition-colors border border-[#E3DFD6]"
+          title="Manage name & email verification"
+        >
+          <User class="w-3.5 h-3.5 text-[#5E5B53]" />
+          <span>Profile</span>
+          <ShieldCheck v-if="userProfile?.is_email_verified" class="w-3.5 h-3.5 text-[#1E7B4F]" />
+          <span v-else class="w-2 h-2 rounded-full bg-[#B42318]"></span>
         </button>
 
         <!-- Connect / Join / Wallet Chip -->
@@ -344,6 +444,7 @@ onMounted(() => {
           <span class="w-2 h-2 rounded-full bg-[#1E7B4F]"></span>
           <span class="font-mono text-[#5E5B53] hidden sm:inline">{{ publicKey.slice(0, 4) }}...{{ publicKey.slice(-4) }}</span>
           <span class="font-semibold text-[#1A1A17]">{{ balance.toFixed(3) }} SOL</span>
+          <span class="text-[#5E5B53] text-[11px] hidden md:inline">({{ getUsdValue(balance) }})</span>
         </button>
       </div>
 
@@ -515,9 +616,13 @@ onMounted(() => {
                 @select="selectTask(task)"
               />
 
-              <div v-if="tasks.length === 0" class="p-8 text-center text-[#5E5B53] text-[14px]">
-                No tasks match your filters. Try picking another city or resetting filters.
-              </div>
+              <EmptyState 
+                v-if="tasks.length === 0 && !loading"
+                title="No tasks match your criteria"
+                description="We couldn't find any bounties matching your search or location filters. Try switching cities or clearing filters."
+                actionLabel="Reset filters"
+                @action="filterStatus = 'ALL'; filterCategory = 'ALL'; filterCity = 'ALL'; searchQuery = ''; fetchTasks()"
+              />
             </div>
 
           </div>
@@ -546,25 +651,109 @@ onMounted(() => {
               :userAddress="publicKey"
               :submitting="submittingPost"
               @createTask="handleCreateTask"
+              @updateFormData="(data) => livePostData = data"
             />
           </div>
 
-          <!-- Right 40%: Sticky Live Preview -->
+          <!-- Right 40%: Sticky Live Specification Review (12 Required Fields) -->
           <div class="md:col-span-5 sticky top-6 space-y-4 text-left">
-            <div class="bg-white p-5 rounded-[16px] border border-[#E3DFD6] shadow-xs space-y-3">
-              <span class="text-[12px] font-semibold text-[#5E5B53] uppercase">Live task preview</span>
+            <div class="bg-white p-5 rounded-[16px] border border-[#E3DFD6] shadow-xs space-y-4">
+              <div class="flex items-center justify-between border-b border-[#E3DFD6] pb-2.5">
+                <span class="text-[12px] font-semibold text-[#5E5B53] uppercase tracking-wider">Live Task Review</span>
+                <span class="text-[12px] font-mono font-medium text-[#1E7B4F]">Solana Devnet</span>
+              </div>
               
-              <div class="h-44 bg-[#F7F5F0] rounded-[10px] border border-[#E3DFD6] overflow-hidden">
+              <!-- Mini map of target coordinate -->
+              <div class="h-40 bg-[#F7F5F0] rounded-[10px] border border-[#E3DFD6] overflow-hidden">
                 <MapCanvas 
                   :tasks="tasks" 
                   :selectedTask="selectedTask" 
                 />
               </div>
 
-              <div class="p-3 bg-[#F7F5F0] rounded-[8px] space-y-1 text-[13px]">
-                <div class="font-semibold text-[#1A1A17]">Verification rules</div>
-                <div class="text-[#5E5B53]">Radius boundary: 150 meters &middot; Multimodal vision inspection enabled.</div>
+              <!-- Complete 12-Item Field Specification Grid -->
+              <div class="grid grid-cols-2 gap-3 text-[12px] divide-y-0">
+                <!-- 1. Title -->
+                <div class="col-span-2 p-2.5 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+                  <span class="text-[#5E5B53] text-[11px] font-medium block">1. Task Title</span>
+                  <div class="font-semibold text-[#1A1A17] text-[13px] leading-tight">
+                    {{ livePostData.title || '-' }}
+                  </div>
+                </div>
+
+                <!-- 2. Category -->
+                <div class="p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+                  <span class="text-[#5E5B53] text-[11px] font-medium block">2. Category</span>
+                  <div class="font-medium text-[#1A1A17]">{{ livePostData.category || '-' }}</div>
+                </div>
+
+                <!-- 3. Escrow Deposit -->
+                <div class="p-2 bg-[#FFFBEA] border border-[#FFD60A]/60 rounded-[8px] space-y-0.5">
+                  <span class="text-[#5E5B53] text-[11px] font-medium block">3. Escrow Deposit</span>
+                  <div class="font-bold text-[#1A1A17]">
+                    {{ livePostData.rewardSol ? `${livePostData.rewardSol.toFixed(2)} SOL (${getUsdValue(livePostData.rewardSol)})` : '-' }}
+                  </div>
+                </div>
+
+                <!-- 4. Place / Landmark -->
+                <div class="p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+                  <span class="text-[#5E5B53] text-[11px] font-medium block">4. Place / Landmark</span>
+                  <div class="font-medium text-[#1A1A17] truncate">{{ livePostData.placeName || '-' }}</div>
+                </div>
+
+                <!-- 5. City & Country -->
+                <div class="p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+                  <span class="text-[#5E5B53] text-[11px] font-medium block">5. City & Country</span>
+                  <div class="font-medium text-[#1A1A17]">{{ livePostData.city && livePostData.country ? `${livePostData.city}, ${livePostData.country}` : '-' }}</div>
+                </div>
+
+                <!-- 6. Full Address -->
+                <div class="col-span-2 p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+                  <span class="text-[#5E5B53] text-[11px] font-medium block">6. Full Address</span>
+                  <div class="font-medium text-[#1A1A17] line-clamp-1">{{ livePostData.fullAddress || '-' }}</div>
+                </div>
+
+                <!-- 7. Coordinates -->
+                <div class="p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+                  <span class="text-[#5E5B53] text-[11px] font-medium block">7. GPS Coordinates</span>
+                  <div class="font-mono text-[#1A1A17] text-[11px]">
+                    {{ livePostData.latitude && livePostData.longitude ? `${livePostData.latitude.toFixed(4)}, ${livePostData.longitude.toFixed(4)}` : '-' }}
+                  </div>
+                </div>
+
+                <!-- 8. Boundary Radius -->
+                <div class="p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+                  <span class="text-[#5E5B53] text-[11px] font-medium block">8. Geofence Radius</span>
+                  <div class="font-medium text-[#1A1A17]">{{ livePostData.radiusMeters ? `${livePostData.radiusMeters} meters` : '-' }}</div>
+                </div>
+
+                <!-- 9. Must Show -->
+                <div class="col-span-2 p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+                  <span class="text-[#5E5B53] text-[11px] font-medium block">9. Target Photo Spec</span>
+                  <div class="text-[#1A1A17]">{{ livePostData.targetDescription || '-' }}</div>
+                </div>
+
+                <!-- 10. Disqualifiers -->
+                <div class="col-span-2 p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+                  <span class="text-[#5E5B53] text-[11px] font-medium block">10. Forbidden / Disqualifiers</span>
+                  <div class="text-[#1A1A17]">{{ livePostData.forbiddenDescription || '-' }}</div>
+                </div>
+
+                <!-- 11. Completion Window -->
+                <div class="p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+                  <span class="text-[#5E5B53] text-[11px] font-medium block">11. Finish Window</span>
+                  <div class="font-medium text-[#1A1A17]">{{ livePostData.finishWindowMinutes ? `${livePostData.finishWindowMinutes} min` : '-' }}</div>
+                </div>
+
+                <!-- 12. Reference Photos -->
+                <div class="p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+                  <span class="text-[#5E5B53] text-[11px] font-medium block">12. Reference Image</span>
+                  <div class="font-medium text-[#1A1A17]">
+                    {{ livePostData.referencePhotos && livePostData.referencePhotos.length > 0 ? `${livePostData.referencePhotos.length} attached` : '-' }}
+                  </div>
+                </div>
               </div>
+
             </div>
           </div>
 
@@ -647,7 +836,8 @@ onMounted(() => {
                   <span>&middot;</span>
                   <span>{{ t.city || 'Berlin' }}</span>
                   <span>&middot;</span>
-                  <span class="font-medium text-[#1A1A17]">{{ t.reward_sol.toFixed(2) }} SOL</span>
+                  <span class="font-semibold text-[#1A1A17]">{{ t.reward_sol.toFixed(2) }} SOL</span>
+                  <span class="text-[12px] text-[#5E5B53]">({{ getUsdValue(t.reward_sol) }})</span>
                 </div>
               </div>
 
@@ -658,15 +848,21 @@ onMounted(() => {
                 <div v-else-if="t.refund_tx_sig" class="hidden sm:block">
                   <TxLink :signature="t.refund_tx_sig" label="Refund" />
                 </div>
-                <div class="text-[13px] text-[#5E5B53] font-medium">
-                  Inspect &rarr;
+                <div class="text-[13px] text-[#5E5B53] font-medium flex items-center gap-1">
+                  <span>Inspect</span>
+                  <span>&rarr;</span>
                 </div>
               </div>
             </div>
 
-            <div v-if="filteredActivityTasks.length === 0" class="p-12 text-center text-[#5E5B53] text-[14px]">
-              No tasks found in this view.
-            </div>
+            <!-- Empty State when filtered activity is empty -->
+            <EmptyState 
+              v-if="filteredActivityTasks.length === 0"
+              title="No activity recorded"
+              :description="publicKey ? 'You do not have any tasks under this filter yet. Post a bounty or claim an open task in your city to get started.' : 'Connect your Phantom wallet to view your personal on-chain task history, payouts, and claims.'"
+              :actionLabel="publicKey ? 'Explore open bounties' : 'Connect Phantom'"
+              @action="publicKey ? navigateTo('feed') : showWalletModal = true"
+            />
           </div>
 
         </div>
@@ -800,6 +996,14 @@ onMounted(() => {
       @connectPhantom="handleConnectPhantom"
       @faucet="fetchFaucet"
       @disconnect="disconnect"
+    />
+
+    <UserProfileModal 
+      :isOpen="showProfileModal"
+      :address="publicKey"
+      :userProfile="userProfile"
+      @close="showProfileModal = false"
+      @profileUpdated="refreshProfile"
     />
 
   </div>

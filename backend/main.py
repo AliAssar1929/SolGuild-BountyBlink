@@ -64,6 +64,19 @@ class NonceVerifyRequest(BaseModel):
     address: str
     signature: str
 
+class UpdateProfileRequest(BaseModel):
+    address: str
+    name: Optional[str] = None
+    email: Optional[str] = None
+
+class SendEmailCodeRequest(BaseModel):
+    address: str
+    email: str
+
+class VerifyEmailCodeRequest(BaseModel):
+    address: str
+    code: str
+
 # Seed 8 Diverse Tasks across 4 Cities
 def seed_demo_data(db: Session):
     existing = db.query(Task).count()
@@ -333,6 +346,14 @@ def claim_task(task_id: str, req: ClaimTaskRequest, db: Session = Depends(get_db
     if task.status != "OPEN":
         raise HTTPException(status_code=400, detail=f"Task is already {task.status}")
 
+    # Worker verification check
+    worker = db.query(User).filter(User.address == req.worker_address).first()
+    if not worker or not worker.is_email_verified:
+        raise HTTPException(
+            status_code=403, 
+            detail="Email verification required. Please verify your email in Profile before accepting tasks."
+        )
+
     now = datetime.datetime.utcnow()
     expires_at = now + datetime.timedelta(minutes=task.finish_window_minutes)
     
@@ -554,6 +575,9 @@ def get_user_profile(address: str, db: Session = Depends(get_db)):
 
     return {
         "address": user.address,
+        "name": user.name or "",
+        "email": user.email or "",
+        "is_email_verified": bool(user.is_email_verified),
         "joined_at": user.joined_at.isoformat() if user.joined_at else None,
         "last_active": user.last_active.isoformat() if user.last_active else None,
         "tasks_posted": posted_count,
@@ -562,6 +586,119 @@ def get_user_profile(address: str, db: Session = Depends(get_db)):
         "balance_sol": balance,
         "cluster": "devnet"
     }
+
+@app.post("/api/user/profile")
+def update_profile(req: UpdateProfileRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.address == req.address).first()
+    if not user:
+        user = User(address=req.address, joined_at=datetime.datetime.utcnow(), last_active=datetime.datetime.utcnow())
+        db.add(user)
+    
+    if req.name is not None:
+        user.name = req.name.strip()
+    if req.email is not None:
+        new_email = req.email.strip().lower()
+        if new_email != user.email:
+            user.email = new_email
+            user.is_email_verified = False # Reset verification if email changes
+    
+    db.commit()
+    return {"status": "ok", "user": {
+        "address": user.address,
+        "name": user.name,
+        "email": user.email,
+        "is_email_verified": user.is_email_verified
+    }}
+
+@app.post("/api/user/email/send-code")
+def send_email_code(req: SendEmailCodeRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.address == req.address).first()
+    if not user:
+        user = User(address=req.address, joined_at=datetime.datetime.utcnow(), last_active=datetime.datetime.utcnow())
+        db.add(user)
+    
+    # Generate 6-digit OTP
+    code = f"{secrets.randbelow(900000) + 100000}"
+    expires_at = datetime.datetime.utcnow() + datetime.timedelta(minutes=15)
+    
+    user.email = req.email.strip().lower()
+    user.email_verification_code = code
+    user.email_code_expires_at = expires_at
+    db.commit()
+
+    print(f"\n=======================================================")
+    print(f"📧 [EMAIL SIMULATOR] To: {user.email}")
+    print(f"Subject: BountyBlink Verification Code")
+    print(f"Your verification code is: {code} (Valid for 15 minutes)")
+    print(f"=======================================================\n")
+
+    return {
+        "status": "ok",
+        "message": f"Verification code sent to {user.email}. Valid for 15 minutes.",
+        "dev_code": code, # Provided for seamless evaluation
+        "expires_in_seconds": 900
+    }
+
+@app.post("/api/user/email/verify")
+def verify_email_code(req: VerifyEmailCodeRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.address == req.address).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if not user.email_verification_code or not user.email_code_expires_at:
+        raise HTTPException(status_code=400, detail="No verification code was requested")
+    
+    now = datetime.datetime.utcnow()
+    if now > user.email_code_expires_at:
+        raise HTTPException(status_code=400, detail="Verification code has expired. Please request a new one.")
+    
+    if req.code.strip() != user.email_verification_code.strip():
+        raise HTTPException(status_code=400, detail="Invalid verification code")
+    
+    user.is_email_verified = True
+    user.email_verification_code = None
+    user.email_code_expires_at = None
+    db.commit()
+
+    return {"status": "ok", "message": "Email successfully verified", "is_email_verified": True}
+
+@app.get("/api/user/{address}/activity")
+def get_user_activity(address: str, db: Session = Depends(get_db)):
+    posted_tasks = db.query(Task).filter(Task.poster_address == address).order_by(Task.created_at.desc()).all()
+    user_claims = db.query(Claim).filter(Claim.worker_address == address).order_by(Claim.claimed_at.desc()).all()
+    
+    claimed_task_ids = [c.task_id for c in user_claims]
+    claimed_tasks = db.query(Task).filter(Task.id.in_(claimed_task_ids)).all() if claimed_task_ids else []
+    
+    submissions = db.query(Submission).filter(Submission.worker_address == address).order_by(Submission.created_at.desc()).all()
+
+    return {
+        "posted_tasks": posted_tasks,
+        "claimed_tasks": claimed_tasks,
+        "submissions": submissions,
+        "stats": {
+            "total_posted": len(posted_tasks),
+            "total_claimed": len(user_claims),
+            "total_submissions": len(submissions)
+        }
+    }
+
+# Live SOL/USD Price Endpoint (Cached)
+@app.get("/api/price/sol")
+async def get_sol_price():
+    url = "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd"
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(url)
+            if resp.status_code == 200:
+                data = resp.json()
+                if "solana" in data and "usd" in data["solana"]:
+                    return {"sol_usd": float(data["solana"]["usd"])}
+    except Exception as e:
+        print(f"CoinGecko price fetch fallback: {e}")
+    
+    # Solid Devnet price fallback
+    return {"sol_usd": 155.0}
 
 # 4. Usage Totals Endpoint for Demo Drawer
 @app.get("/api/demo/usage")

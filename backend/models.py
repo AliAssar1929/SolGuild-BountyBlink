@@ -71,6 +71,11 @@ class User(Base):
     __tablename__ = "users"
 
     address = Column(String(44), primary_key=True, index=True)
+    name = Column(String(100), nullable=True)
+    email = Column(String(150), nullable=True, index=True)
+    is_email_verified = Column(Boolean, default=False)
+    email_verification_code = Column(String(6), nullable=True)
+    email_code_expires_at = Column(DateTime, nullable=True)
     joined_at = Column(DateTime, default=datetime.datetime.utcnow)
     last_active = Column(DateTime, default=datetime.datetime.utcnow)
     tasks_posted = Column(Integer, default=0)

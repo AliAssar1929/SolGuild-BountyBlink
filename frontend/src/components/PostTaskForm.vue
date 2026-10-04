@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import AddressSearch from './AddressSearch.vue'
 import ReferencePhotoPicker from './ReferencePhotoPicker.vue'
+
 const props = defineProps<{
   userAddress: string
   submitting: boolean
@@ -9,6 +10,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'createTask', payload: any): void
+  (e: 'updateFormData', data: any): void
 }>()
 
 // Step state: 1. Basics, 2. Place, 3. Requirements, 4. Timing & Reward, 5. Review
@@ -36,6 +38,33 @@ const categories = ['Infrastructure', 'Storefront', 'Logistics', 'Mobility', 'Ac
 const radii = [50, 100, 150, 250]
 const windows = [10, 15, 30]
 
+const emitCurrentState = () => {
+  emit('updateFormData', {
+    title: title.value,
+    category: category.value,
+    instruction: instruction.value,
+    targetDescription: targetDescription.value,
+    forbiddenDescription: forbiddenDescription.value,
+    placeName: placeName.value,
+    fullAddress: fullAddress.value,
+    city: city.value,
+    country: country.value,
+    latitude: latitude.value,
+    longitude: longitude.value,
+    radiusMeters: radiusMeters.value,
+    photosRequired: photosRequired.value,
+    finishWindowMinutes: finishWindowMinutes.value,
+    rewardSol: rewardSol.value,
+    referencePhotos: referencePhotos.value
+  })
+}
+
+watch(
+  [title, category, instruction, targetDescription, forbiddenDescription, placeName, fullAddress, city, country, latitude, longitude, radiusMeters, photosRequired, finishWindowMinutes, rewardSol, referencePhotos],
+  emitCurrentState,
+  { immediate: true, deep: true }
+)
+
 const handleAddressSelect = (loc: any) => {
   fullAddress.value = loc.full_address
   placeName.value = loc.place_name
@@ -43,6 +72,7 @@ const handleAddressSelect = (loc: any) => {
   country.value = loc.country
   latitude.value = loc.lat
   longitude.value = loc.lon
+  emitCurrentState()
 }
 
 const applyPreset = (presetTitle: string, presetInst: string, presetTarget: string, presetCat: string) => {
@@ -50,6 +80,7 @@ const applyPreset = (presetTitle: string, presetInst: string, presetTarget: stri
   instruction.value = presetInst
   targetDescription.value = presetTarget
   category.value = presetCat
+  emitCurrentState()
 }
 
 const handleSubmit = () => {

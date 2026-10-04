@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import StatusWord from './StatusWord.vue'
+import { useSolPrice } from '../composables/useSolPrice'
 
-defineProps<{
+const props = defineProps<{
   task: {
     id: string
     title: string
@@ -17,6 +18,8 @@ defineProps<{
 defineEmits<{
   (e: 'select'): void
 }>()
+
+const { getUsdValue } = useSolPrice()
 </script>
 
 <template>
@@ -44,10 +47,13 @@ defineEmits<{
       </div>
     </div>
 
-    <div class="text-right shrink-0 pt-0.5">
-      <span class="font-semibold text-[15px] text-[#1A1A17]">
+    <div class="text-right shrink-0 pt-0.5 space-y-0.5">
+      <div class="font-semibold text-[15px] text-[#1A1A17] leading-none">
         {{ task.reward_sol.toFixed(2) }} SOL
-      </span>
+      </div>
+      <div class="text-[11px] text-[#5E5B53] font-medium leading-none">
+        {{ getUsdValue(task.reward_sol) }}
+      </div>
     </div>
   </div>
 </template>
