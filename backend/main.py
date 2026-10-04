@@ -109,21 +109,22 @@ class VerifyEmailCodeRequest(BaseModel):
     code: str
 
 # Seed Authentic Anime Adventurer Guild Quests across Berlin, Paris, London, Tokyo
+# Strict 3-category taxonomy: "Civil Help", "Sensitive Task", "Commercial"
 def seed_demo_data(db: Session):
     existing = db.query(Task).count()
     if existing == 0:
         now = datetime.datetime.utcnow()
         expiry = now + datetime.timedelta(days=7)
         demo_tasks = [
-            # Berlin: Bohemian Pet Rescue & Night Companion
+            # Berlin: Find Lost Cat & Grandpa Wheelchair Assistance
             Task(
                 id=str(uuid.uuid4()),
-                title="Lost tortoiseshell cat 'Mika' near Boxhagener Platz",
-                category="Pet Rescue",
-                instruction="Search around the park benches and flea market square near Boxhagener Platz. Look for a calm tortoiseshell cat with a yellow bell collar.",
-                target_description="Tortoiseshell calico cat with distinct yellow collar tag near greenery or bench",
-                forbidden_description="Different dog or stray cat without yellow bell collar",
-                place_name="Boxhagener Platz Flea Market",
+                title="Find my calico cat 'Mika' near Boxhagener Platz",
+                category="Civil Help",
+                instruction="Search around the park benches and chestnut trees near Boxhagener Platz. My elderly cat slipped her harness; she has a distinctive yellow bell collar and calico patches.",
+                target_description="Calico cat with white chest, ginger patches, and yellow bell collar resting near grass or bench",
+                forbidden_description="Different animal, dog, or cat without yellow collar",
+                place_name="Boxhagener Platz Square",
                 full_address="Boxhagener Pl. 1, 10245 Berlin, Germany",
                 city="Berlin",
                 country="Germany",
@@ -139,52 +140,32 @@ def seed_demo_data(db: Session):
             ),
             Task(
                 id=str(uuid.uuid4()),
-                title="Safe companion walk escort to Warschauer Str. U-Bahn",
-                category="Safety Escort",
-                instruction="Meet outside RAW-Gelände gate and escort our party member safely past the railway bridge to Warschauer Str. U-Bahn station.",
-                target_description="Warschauer Str. station entrance glass pavilion and yellow U-Bahn sign",
-                forbidden_description="Blurred motion, dark unrecognizable alley",
-                place_name="RAW-Gelände to Warschauer U-Bahn",
+                title="Help my grandpa on wheelchair navigate Warschauer U-Bahn elevator",
+                category="Civil Help",
+                instruction="Meet my grandpa and assist with wheelchair navigation through the busy station ramp and elevator entrance to the yellow U1/U3 platform.",
+                target_description="Warschauer Str. station accessible entrance glass elevator tower and yellow U-Bahn sign",
+                forbidden_description="Blurred motion, dark unrecognizable stairs",
+                place_name="Warschauer Str. Barrier-Free Access",
                 full_address="Revaler Str. 99, 10245 Berlin, Germany",
                 city="Berlin",
                 country="Germany",
                 latitude=52.5085,
                 longitude=13.4522,
                 radius_meters=150,
-                reward_sol=0.025,
-                poster_address="Adventurer_PartyLead_DevnetKey",
+                reward_sol=0.04,
+                poster_address="Family_Support_Berlin_DevnetKey",
                 status="OPEN",
                 fund_tx_sig="4WqP...GuildSealSig",
                 created_at=now,
                 expires_at=expiry
             ),
+            # Paris: Lost Purse in Courtyard & Commercial Product Photoshoot
             Task(
                 id=str(uuid.uuid4()),
-                title="Check vintage vinyl crate arrival at Friedrichshain record vault",
-                category="Errand",
-                instruction="Drop by Space Hall records on Zossener Str. Verify if the rare imported anime soundtrack crate has arrived on display.",
-                target_description="Storefront window display with newly arrived vinyl shelf visible",
-                place_name="Space Hall Record Vault",
-                full_address="Zossener Str. 33, 10961 Berlin, Germany",
-                city="Berlin",
-                country="Germany",
-                latitude=52.4921,
-                longitude=13.3934,
-                radius_meters=100,
-                reward_sol=0.015,
-                poster_address="Collector_Guildsman_DevnetKey",
-                status="OPEN",
-                fund_tx_sig="3RtL...GuildSealSig",
-                created_at=now,
-                expires_at=expiry
-            ),
-            # Paris: Lost Heirloom Recovery & Belleville Artisan Errand
-            Task(
-                id=str(uuid.uuid4()),
-                title="Lost antique brass locket in Le Marais courtyard",
-                category="Lost Item",
-                instruction="Search around the cobblestone fountain courtyard near Place des Vosges. A small heart-shaped engraved brass locket slipped off during afternoon walk.",
-                target_description="Heart-shaped engraved brass locket resting on stone or ivy bench",
+                title="Find my leather purse lost in Place des Vosges arcade",
+                category="Civil Help",
+                instruction="Check the red-brick stone arcade walkway and courtyard fountain perimeter. Left a burgundy leather shoulder purse with gold buckle on a stone bench.",
+                target_description="Burgundy leather shoulder purse with golden clasp on bench or arcade pillar base",
                 place_name="Place des Vosges North Arcade",
                 full_address="Place des Vosges, 75004 Paris, France",
                 city="Paris",
@@ -192,7 +173,7 @@ def seed_demo_data(db: Session):
                 latitude=48.8554,
                 longitude=2.3656,
                 radius_meters=100,
-                reward_sol=0.04,
+                reward_sol=0.045,
                 poster_address="Madame_Fleur_DevnetKey",
                 status="OPEN",
                 fund_tx_sig="7LkP...GuildSealSig",
@@ -201,10 +182,10 @@ def seed_demo_data(db: Session):
             ),
             Task(
                 id=str(uuid.uuid4()),
-                title="Sunday artisan baguette & pastry queue status at Belleville",
-                category="Errand",
-                instruction="Check if the line at Boulangerie artisanale on Rue de Belleville is under 10 minutes so our guild brunch party can send someone over.",
-                target_description="Bakery entrance showing queue length and chalkboard daily specials",
+                title="Buy artisan pastry from Belleville shop & take promotional photoshoot",
+                category="Commercial",
+                instruction="Purchase the seasonal pistachio tart from the bakery display, place it by the window terrace with shop signage in background, and capture a sharp commercial photo.",
+                target_description="Pistachio pastry confection in packaging with Boulangerie Belleville storefront lettering in focus",
                 place_name="Boulangerie Artisanale Belleville",
                 full_address="38 Rue de Belleville, 75020 Paris, France",
                 city="Paris",
@@ -212,60 +193,60 @@ def seed_demo_data(db: Session):
                 latitude=48.8722,
                 longitude=2.3811,
                 radius_meters=100,
-                reward_sol=0.02,
+                reward_sol=0.03,
                 poster_address="Guild_Gourmet_FR_DevnetKey",
                 status="OPEN",
                 fund_tx_sig="2MkQ...GuildSealSig",
                 created_at=now,
                 expires_at=expiry
             ),
-            # London: Misplaced Sketchbook & Soho Night Companion Escort
+            # London: Gather Info of Specific Vehicle & Sensitive Courier
             Task(
                 id=str(uuid.uuid4()),
-                title="Lost brown leather sketchbook at Camden Lock bridge",
-                category="Lost Item",
-                instruction="Check the wooden canal overlook benches near Camden Lock food stalls. Left a thick brown leather-bound fantasy art sketchbook.",
-                target_description="Brown leather sketchbook with brass clasp on wooden bench or ledge",
-                place_name="Camden Lock Canal Bridge",
+                title="Gather info & license plate of silver van near St. Pancras delivery bay",
+                category="Sensitive Task",
+                instruction="Discreetly inspect the commercial loading bay near Pancras Square. Verify the exact license plate and courier badge on the parked silver logistics van.",
+                target_description="Silver cargo van rear view with clearly legible UK registration plate and loading bay dock",
+                place_name="Pancras Square Logistics Dock",
+                full_address="Euston Rd, London N1C 4QP, United Kingdom",
+                city="London",
+                country="United Kingdom",
+                latitude=51.5318,
+                longitude=-0.1243,
+                radius_meters=100,
+                reward_sol=0.05,
+                poster_address="Fleet_Security_UK_DevnetKey",
+                status="OPEN",
+                fund_tx_sig="9PlM...GuildSealSig",
+                created_at=now,
+                expires_at=expiry
+            ),
+            Task(
+                id=str(uuid.uuid4()),
+                title="Gather info on vintage convertible parked by Regent's Canal lock",
+                category="Sensitive Task",
+                instruction="A vintage British racing green sports car is parked near the bridge. Note windshield inspection sticker and take identification angle photo.",
+                target_description="British racing green vintage convertible with front chrome grille and registration badge visible",
+                place_name="Camden Lock Overlook",
                 full_address="Camden Lock Pl, London NW1 8AF, United Kingdom",
                 city="London",
                 country="United Kingdom",
                 latitude=51.5414,
                 longitude=-0.1466,
                 radius_meters=100,
-                reward_sol=0.03,
-                poster_address="Manga_Artist_UK_DevnetKey",
+                reward_sol=0.035,
+                poster_address="Auto_Investigator_UK_DevnetKey",
                 status="OPEN",
                 fund_tx_sig="8KjN...GuildSealSig",
                 created_at=now,
                 expires_at=expiry
             ),
+            # Tokyo: Find Lost Kuro Cat & Commercial Showcase
             Task(
                 id=str(uuid.uuid4()),
-                title="Late-night pub walk escort to King's Cross St. Pancras",
-                category="Safety Escort",
-                instruction="Help escort a tipsy companion safely from the King's Cross pub exit to the main Underground ticket barrier hall.",
-                target_description="King's Cross station western concourse diagrid lattice roof and barrier gates",
-                place_name="King's Cross Station Concourse",
-                full_address="Euston Rd, London N1C 4QP, United Kingdom",
-                city="London",
-                country="United Kingdom",
-                latitude=51.5318,
-                longitude=-0.1243,
-                radius_meters=150,
-                reward_sol=0.025,
-                poster_address="London_Traveller_DevnetKey",
-                status="OPEN",
-                fund_tx_sig="9PlM...GuildSealSig",
-                created_at=now,
-                expires_at=expiry
-            ),
-            # Tokyo: Temple Cat Sighting & Hot Dashi Can Delivery
-            Task(
-                id=str(uuid.uuid4()),
-                title="Locate runaway black cat 'Kuro' near Yanaka Ginza temple",
-                category="Pet Rescue",
-                instruction="Walk down the Yuyake Dandan stairs in historic Yanaka. Look for a sleek black cat with red silk ribbon collar relaxing near Tennoji temple.",
+                title="Find my black cat 'Kuro' with red ribbon near Yanaka Ginza temple",
+                category="Civil Help",
+                instruction="Walk down the Yuyake Dandan stairs in historic Yanaka. Look for a sleek black cat with red silk ribbon collar relaxing near Tennoji temple stone lanterns.",
                 target_description="Black cat with red silk ribbon collar or bell charm near temple stone lanterns",
                 place_name="Yanaka Ginza Yuyake Dandan",
                 full_address="3 Chome-13-1 Yanaka, Taito City, Tokyo 110-0001, Japan",
@@ -283,18 +264,18 @@ def seed_demo_data(db: Session):
             ),
             Task(
                 id=str(uuid.uuid4()),
-                title="Emergency hot canned dashi delivery at Akihabara station",
-                category="Errand",
-                instruction="Our traveling party member is stranded with a bad cold at Akihabara Electric Town gate. Purchase a hot flying fish dashi can from the platform vending machine and photograph handoff.",
-                target_description="Hot Dashi soup can bottle in hand with Akihabara station pillar sign visible",
-                place_name="Akihabara Station Electric Town Exit",
-                full_address="1 Chome Soto-Kanda, Chiyoda City, Tokyo 101-0021, Japan",
+                title="Buy exclusive figure from Akihabara Radio Kaikan & take product photoshoot",
+                category="Commercial",
+                instruction="Visit the 2nd floor hobby booth at Radio Kaikan, purchase the limited edition display item, and photograph the boxed product alongside storefront showcase.",
+                target_description="Collectible figure product packaging in front of Akihabara Radio Kaikan neon facade",
+                place_name="Akihabara Radio Kaikan",
+                full_address="1 Chome-15-16 Soto-Kanda, Chiyoda City, Tokyo 101-0021, Japan",
                 city="Tokyo",
                 country="Japan",
                 latitude=35.6983,
                 longitude=139.7731,
                 radius_meters=100,
-                reward_sol=0.03,
+                reward_sol=0.04,
                 poster_address="Otaku_Guildmate_Tokyo_DevnetKey",
                 status="OPEN",
                 fund_tx_sig="6TxR...GuildSealSig",
@@ -433,14 +414,6 @@ async def claim_task(task_id: str, req: ClaimTaskRequest, db: Session = Depends(
         raise HTTPException(status_code=404, detail="Task not found")
     if task.status != "OPEN":
         raise HTTPException(status_code=400, detail=f"Task is already {task.status}")
-
-    # Worker verification check
-    worker = db.query(User).filter(User.address == req.worker_address).first()
-    if not worker or not worker.is_email_verified:
-        raise HTTPException(
-            status_code=403, 
-            detail="Email verification required. Please verify your email in Profile before accepting tasks."
-        )
 
     now = datetime.datetime.utcnow()
     expires_at = now + datetime.timedelta(minutes=task.finish_window_minutes)
@@ -718,23 +691,68 @@ def get_user_profile(address: str, db: Session = Depends(get_db)):
         db.add(user)
         db.commit()
     
-    # Calculate live stats
+    # Calculate live stats & authentic guild rank progression (F -> E -> D -> C -> B -> A -> S)
     posted_count = db.query(Task).filter(Task.poster_address == address).count()
     completed_count = db.query(Claim).filter(Claim.worker_address == address, Claim.status == "RELEASED").count()
+    paid_tasks_posted = db.query(Task).filter(Task.poster_address == address, Task.status == "PAID").count()
     balance = solana_service.get_balance(address)
+
+    # Experience points formula: 100 EXP per quest completed + 50 EXP per quest issued & paid
+    exp_points = (completed_count * 100) + (paid_tasks_posted * 50)
+    
+    if exp_points >= 1500 or completed_count >= 15:
+        rank_tier = "S"
+        rank_title = "S-Rank Grandmaster Adventurer"
+        next_tier = None
+        next_exp_needed = 0
+    elif exp_points >= 800 or completed_count >= 8:
+        rank_tier = "A"
+        rank_title = "A-Rank Elite Adventurer"
+        next_tier = "S"
+        next_exp_needed = 1500 - exp_points
+    elif exp_points >= 450 or completed_count >= 5:
+        rank_tier = "B"
+        rank_title = "B-Rank Veteran Adventurer"
+        next_tier = "A"
+        next_exp_needed = 800 - exp_points
+    elif exp_points >= 250 or completed_count >= 3:
+        rank_tier = "C"
+        rank_title = "C-Rank Skilled Adventurer"
+        next_tier = "B"
+        next_exp_needed = 450 - exp_points
+    elif exp_points >= 100 or completed_count >= 1:
+        rank_tier = "D"
+        rank_title = "D-Rank Proven Adventurer"
+        next_tier = "C"
+        next_exp_needed = 250 - exp_points
+    elif exp_points >= 50 or posted_count >= 1:
+        rank_tier = "E"
+        rank_title = "E-Rank Apprentice Adventurer"
+        next_tier = "D"
+        next_exp_needed = 100 - exp_points
+    else:
+        rank_tier = "F"
+        rank_title = "F-Rank Novice Adventurer"
+        next_tier = "E"
+        next_exp_needed = 50 - exp_points
 
     return {
         "address": user.address,
         "name": user.name or "",
         "email": user.email or "",
-        "is_email_verified": bool(user.is_email_verified),
+        "is_email_verified": True,
         "joined_at": user.joined_at.isoformat() if user.joined_at else None,
         "last_active": user.last_active.isoformat() if user.last_active else None,
         "tasks_posted": posted_count,
         "tasks_completed": completed_count,
         "total_earned_sol": user.total_earned_sol,
         "balance_sol": balance,
-        "cluster": "devnet"
+        "cluster": "devnet",
+        "rank": rank_tier,
+        "rank_title": rank_title,
+        "exp": exp_points,
+        "next_tier": next_tier,
+        "next_exp_needed": next_exp_needed
     }
 
 @app.post("/api/user/profile")

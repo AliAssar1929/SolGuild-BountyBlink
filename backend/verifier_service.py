@@ -103,8 +103,9 @@ class VerifierService:
                 "4. Be strict: If it's a random unrelated image, a selfie, a meme, an empty room, or does not match the requested criteria, reject it immediately."
             )
 
+            model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
             response = self._gemini_client.models.generate_content(
-                model="gemini-2.5-flash",
+                model=model_name,
                 contents=[prompt, pil_image],
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",

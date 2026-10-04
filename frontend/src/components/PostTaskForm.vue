@@ -22,7 +22,7 @@ const currentStep = ref<number>(1)
 
 // Form fields
 const title = ref('')
-const category = ref('Pet Rescue')
+const category = ref('Civil Help')
 const instruction = ref('')
 const targetDescription = ref('')
 const forbiddenDescription = ref('')
@@ -30,15 +30,15 @@ const placeName = ref('')
 const fullAddress = ref('')
 const city = ref('Berlin')
 const country = ref('Germany')
-const latitude = ref(52.5200)
-const longitude = ref(13.4050)
+const latitude = ref(52.5113)
+const longitude = ref(13.4593)
 const radiusMeters = ref(150)
 const photosRequired = ref(1)
 const finishWindowMinutes = ref(15)
-const rewardSol = ref(0.02)
+const rewardSol = ref(0.035)
 const referencePhotos = ref<string[]>([])
 
-const categories = ['Pet Rescue', 'Lost Item', 'Safety Escort', 'Errand', 'Community Help']
+const categories = ['Civil Help', 'Sensitive Task', 'Commercial']
 const radii = [50, 100, 150, 250]
 const windows = [10, 15, 30]
 
@@ -151,20 +151,27 @@ const handleSubmit = () => {
             <Sparkles class="w-3.5 h-3.5 text-[#1A1A17]" />
             <span>Adventurer Guild Templates</span>
           </label>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <button 
               type="button"
-              @click="applyPreset('Lost Calico cat with yellow collar', 'Search around park benches near Boxhagener Platz. Look for a calm calico cat.', 'Calico cat with yellow bell collar tag', 'Pet Rescue', 'Berlin', 52.5113, 13.4593, 'Boxhagener Platz Flea Market', 0.03)"
-              class="p-2.5 text-left rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] hover:border-[#1A1A17] text-[13px] leading-snug cursor-pointer transition-colors"
+              @click="applyPreset('Find my calico cat Mika near Boxhagener Platz', 'Search around park benches near Boxhagener Platz. Look for a calm calico cat with yellow bell collar.', 'Calico cat with yellow bell collar tag near bench', 'Civil Help', 'Berlin', 52.5113, 13.4593, 'Boxhagener Platz Square', 0.035)"
+              class="p-2.5 text-left rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] hover:border-[#1A1A17] text-[12px] leading-snug cursor-pointer transition-colors"
             >
-              🐾 Lost Pet Rescue (Berlin)
+              🐾 Find My Cat (Civil Help)
             </button>
             <button 
               type="button"
-              @click="applyPreset('Safe companion walk to station', 'Meet outside station concourse to safely walk companion past the dark corridor.', 'Station entrance pavilion with station signage', 'Safety Escort', 'London', 51.5318, -0.1243, 'King\'s Cross Station Concourse', 0.025)"
-              class="p-2.5 text-left rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] hover:border-[#1A1A17] text-[13px] leading-snug cursor-pointer transition-colors"
+              @click="applyPreset('Help my grandpa on wheelchair at Warschauer U-Bahn', 'Meet my grandpa and assist with wheelchair navigation to the accessible platform elevator.', 'Accessible elevator tower and yellow U-Bahn sign', 'Civil Help', 'Berlin', 52.5085, 13.4522, 'Warschauer Str. Elevator', 0.04)"
+              class="p-2.5 text-left rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] hover:border-[#1A1A17] text-[12px] leading-snug cursor-pointer transition-colors"
             >
-              🛡 Safe Escort (London)
+              ♿ Help Grandpa (Civil Help)
+            </button>
+            <button 
+              type="button"
+              @click="applyPreset('Gather info of silver van near St. Pancras delivery bay', 'Discreetly verify license plate and courier badge of silver logistics van at delivery dock.', 'Silver cargo van rear view with clearly legible UK registration plate', 'Sensitive Task', 'London', 51.5318, -0.1243, 'Pancras Square Delivery Bay', 0.05)"
+              class="p-2.5 text-left rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] hover:border-[#1A1A17] text-[12px] leading-snug cursor-pointer transition-colors"
+            >
+              🔍 Vehicle Info (Sensitive)
             </button>
           </div>
         </div>

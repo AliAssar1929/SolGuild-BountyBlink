@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { Clock, CheckCircle2, AlertCircle, Check, Scroll, Shield } from 'lucide-vue-next'
+import { ref, computed, onMounted } from 'vue'
+import { CheckCircle2, AlertCircle, Check, Scroll, Shield } from 'lucide-vue-next'
 import { useSolPrice } from '../composables/useSolPrice'
 
 const props = defineProps<{
@@ -18,10 +18,6 @@ const emit = defineEmits<{
 const { getUsdValue } = useSolPrice()
 
 const nameInput = ref('')
-const emailInput = ref('')
-const otpCode = ref('')
-const isSendingCode = ref(false)
-const isVerifyingCode = ref(false)
 const isSavingProfile = ref(false)
 const statusMessage = ref('')
 const errorMessage = ref('')
@@ -31,38 +27,11 @@ const pendingApprovals = ref<any[]>([])
 const loadingApprovals = ref(false)
 const approvingId = ref<string | null>(null)
 
-// 15-minute countdown (900 seconds)
-const secondsLeft = ref(0)
-let timer: any = null
-
-const formattedTimer = computed(() => {
-  const m = Math.floor(secondsLeft.value / 60)
-  const s = secondsLeft.value % 60
-  return `${m}:${s < 10 ? '0' : ''}${s}`
-})
-
-const startTimer = (seconds: number) => {
-  if (timer) clearInterval(timer)
-  secondsLeft.value = seconds
-  timer = setInterval(() => {
-    if (secondsLeft.value > 0) {
-      secondsLeft.value--
-    } else {
-      clearInterval(timer)
-    }
-  }, 1000)
-}
-
 onMounted(() => {
   if (props.userProfile) {
     nameInput.value = props.userProfile.name || ''
-    emailInput.value = props.userProfile.email || ''
   }
   fetchPendingApprovals()
-})
-
-onUnmounted(() => {
-  if (timer) clearInterval(timer)
 })
 
 const fetchPendingApprovals = async () => {
@@ -106,6 +75,19 @@ const handleApprove = async (taskId: string) => {
   }
 }
 
+const rankBadgeColor = computed(() => {
+  const r = props.userProfile?.rank || 'F'
+  switch (r) {
+    case 'S': return 'bg-[#FFD60A] text-[#1A1A17] border-[#1A1A17]'
+    case 'A': return 'bg-[#7F56D9] text-white border-[#6941C6]'
+    case 'B': return 'bg-[#1570EF] text-white border-[#175CD3]'
+    case 'C': return 'bg-[#0E9384] text-white border-[#0B7B6E]'
+    case 'D': return 'bg-[#E3DFD6] text-[#1A1A17] border-[#5E5B53]'
+    case 'E': return 'bg-[#F7F5F0] text-[#5E5B53] border-[#E3DFD6]'
+    default: return 'bg-[#F2F4F7] text-[#475467] border-[#D0D5DD]'
+  }
+})
+
 const handleSaveProfile = async () => {
   if (!props.address) return
   isSavingProfile.value = true
@@ -116,13 +98,12 @@ const handleSaveProfile = async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         address: props.address,
-        name: nameInput.value,
-        email: emailInput.value
+        name: nameInput.value
       })
     })
     const data = await res.json()
     if (res.ok) {
-      statusMessage.value = 'Adventurer profile saved successfully'
+      statusMessage.value = 'Adventurer handle updated successfully'
       emit('profileUpdated')
       setTimeout(() => statusMessage.value = '', 3000)
     } else {
@@ -132,69 +113,6 @@ const handleSaveProfile = async () => {
     errorMessage.value = e.message || 'Error updating profile'
   } finally {
     isSavingProfile.value = false
-  }
-}
-
-const handleSendOtp = async () => {
-  if (!emailInput.value || !emailInput.value.includes('@')) {
-    errorMessage.value = 'Please provide a valid email address first.'
-    return
-  }
-  isSendingCode.value = true
-  errorMessage.value = ''
-  statusMessage.value = ''
-  try {
-    const res = await fetch('/api/user/email/send-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        address: props.address,
-        email: emailInput.value
-      })
-    })
-    const data = await res.json()
-    if (res.ok) {
-      statusMessage.value = data.message || 'Verification code sent.'
-      startTimer(data.expires_in_seconds || 900)
-    } else {
-      errorMessage.value = data.detail || 'Could not send verification code'
-    }
-  } catch (e: any) {
-    errorMessage.value = e.message || 'Network error sending code'
-  } finally {
-    isSendingCode.value = false
-  }
-}
-
-const handleVerifyOtp = async () => {
-  if (!otpCode.value || otpCode.value.length < 6) {
-    errorMessage.value = 'Please enter the 6-digit code.'
-    return
-  }
-  isVerifyingCode.value = true
-  errorMessage.value = ''
-  try {
-    const res = await fetch('/api/user/email/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        address: props.address,
-        code: otpCode.value
-      })
-    })
-    const data = await res.json()
-    if (res.ok) {
-      statusMessage.value = 'Email verified! Adventurer license active.'
-      emit('profileUpdated')
-      if (timer) clearInterval(timer)
-      secondsLeft.value = 0
-    } else {
-      errorMessage.value = data.detail || 'Invalid or expired code'
-    }
-  } catch (e: any) {
-    errorMessage.value = e.message || 'Error verifying code'
-  } finally {
-    isVerifyingCode.value = false
   }
 }
 </script>
@@ -225,16 +143,21 @@ const handleVerifyOtp = async () => {
         <span>{{ statusMessage }}</span>
       </div>
 
-      <!-- License Card -->
+      <!-- License Card with F -> S Rank -->
       <div class="p-5 bg-[#F7F5F0] rounded-[14px] border border-[#E3DFD6] space-y-4">
         <div class="flex items-center justify-between border-b border-[#E3DFD6] pb-3">
-          <div class="flex items-center gap-2">
-            <div class="w-10 h-10 rounded-full bg-[#1A1A17] text-[#FFD60A] font-bold flex items-center justify-center text-[16px]">
-              {{ nameInput ? nameInput.charAt(0).toUpperCase() : '⚔' }}
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-full bg-[#1A1A17] text-[#FFD60A] font-bold flex items-center justify-center text-[18px] border-2 border-[#FFD60A]">
+              {{ userProfile?.rank || 'F' }}
             </div>
             <div>
-              <div class="font-bold text-[16px] text-[#1A1A17]">{{ nameInput || 'Anonymous Adventurer' }}</div>
-              <div class="text-[12px] text-[#5E5B53]">Guild Rank: Silver Adventurer</div>
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-[17px] text-[#1A1A17]">{{ nameInput || 'Anonymous Adventurer' }}</span>
+                <span class="px-2 py-0.5 rounded-full text-[11px] font-extrabold uppercase border" :class="rankBadgeColor">
+                  {{ userProfile?.rank || 'F' }}-Rank
+                </span>
+              </div>
+              <div class="text-[13px] text-[#5E5B53] font-medium">{{ userProfile?.rank_title || 'F-Rank Novice Adventurer' }}</div>
             </div>
           </div>
           <span class="text-[12px] font-mono font-medium px-2.5 py-1 rounded-[6px] bg-white border border-[#E3DFD6] text-[#1E7B4F]">
@@ -242,100 +165,103 @@ const handleVerifyOtp = async () => {
           </span>
         </div>
 
-        <div class="grid grid-cols-2 gap-3 text-[13px]">
+        <!-- Rank Progression Bar -->
+        <div class="space-y-1.5 p-3 bg-white rounded-[10px] border border-[#E3DFD6]">
+          <div class="flex justify-between text-[12px] text-[#5E5B53]">
+            <span>Rank Progression</span>
+            <span class="font-semibold text-[#1A1A17]">{{ userProfile?.exp || 0 }} EXP {{ userProfile?.next_tier ? `(${userProfile.next_exp_needed} EXP to ${userProfile.next_tier}-Rank)` : '(Max Rank S Reached!)' }}</span>
+          </div>
+          <div class="h-2 bg-[#F7F5F0] rounded-full overflow-hidden border border-[#E3DFD6]">
+            <div 
+              class="h-full bg-[#FFD60A] transition-all duration-500" 
+              :style="{ width: `${Math.min(100, Math.max(8, ((userProfile?.exp || 0) / 1500) * 100))}%` }"
+            ></div>
+          </div>
+          <div class="flex justify-between text-[10px] text-[#5E5B53] font-mono pt-0.5">
+            <span :class="userProfile?.rank === 'F' ? 'font-bold text-[#1A1A17]' : ''">F</span>
+            <span :class="userProfile?.rank === 'E' ? 'font-bold text-[#1A1A17]' : ''">E</span>
+            <span :class="userProfile?.rank === 'D' ? 'font-bold text-[#1A1A17]' : ''">D</span>
+            <span :class="userProfile?.rank === 'C' ? 'font-bold text-[#1A1A17]' : ''">C</span>
+            <span :class="userProfile?.rank === 'B' ? 'font-bold text-[#1A1A17]' : ''">B</span>
+            <span :class="userProfile?.rank === 'A' ? 'font-bold text-[#1A1A17]' : ''">A</span>
+            <span :class="userProfile?.rank === 'S' ? 'font-bold text-[#1A1A17]' : ''">S</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3 text-[13px] pt-1">
           <div>
-            <span class="text-[#5E5B53] text-[11px] block">Public Address</span>
-            <span class="font-mono text-[#1A1A17] font-medium text-[12px]">{{ address.slice(0, 8) }}...{{ address.slice(-6) }}</span>
+            <span class="text-[#5E5B53] text-[11px] block">Public Key</span>
+            <span class="font-mono text-[#1A1A17] font-medium text-[12px]">{{ address.slice(0, 6) }}...{{ address.slice(-4) }}</span>
+          </div>
+          <div>
+            <span class="text-[#5E5B53] text-[11px] block">Quests Completed</span>
+            <span class="font-bold text-[#1A1A17]">{{ userProfile?.tasks_completed || 0 }} completed</span>
           </div>
           <div>
             <span class="text-[#5E5B53] text-[11px] block">Escrow Balance</span>
-            <span class="font-bold text-[#1A1A17]">{{ balance.toFixed(3) }} SOL <span class="text-[#5E5B53] font-normal text-[11px]">({{ getUsdValue(balance) }})</span></span>
+            <span class="font-bold text-[#1A1A17]">{{ balance.toFixed(3) }} SOL</span>
           </div>
         </div>
       </div>
 
-      <!-- Profile Form -->
-      <div class="bg-white rounded-[12px] border border-[#E3DFD6] p-5 space-y-4">
-        <h3 class="text-[15px] font-semibold text-[#1A1A17]">Guild Profile Details</h3>
-        
-        <div>
-          <label class="block text-[13px] font-medium text-[#5E5B53] mb-1">Adventurer Alias / Handle</label>
-          <input 
-            v-model="nameInput"
-            placeholder="e.g. Frieren, Dennis, Hunter"
-            class="w-full px-3.5 py-2.5 rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] text-[14px] text-[#1A1A17] focus:outline-none focus:border-[#1A1A17]"
-          />
+      <!-- Guild Rank Hierarchy Explanation -->
+      <div class="bg-white rounded-[12px] border border-[#E3DFD6] p-5 space-y-3">
+        <div class="flex items-center gap-1.5">
+          <Scroll class="w-4 h-4 text-[#FFD60A]" />
+          <h3 class="text-[14px] font-bold text-[#1A1A17]">Guild Rank Hierarchy & Promotion Logic</h3>
         </div>
-
-        <div>
-          <div class="flex justify-between items-center mb-1">
-            <label class="text-[13px] font-medium text-[#5E5B53]">Guild Dispatch Email *</label>
-            <span v-if="userProfile?.is_email_verified" class="text-[12px] font-semibold text-[#1E7B4F] flex items-center gap-1">
-              <CheckCircle2 class="w-3.5 h-3.5" /> Verified
-            </span>
-            <span v-else class="text-[12px] font-medium text-[#B42318]">Unverified</span>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[12px]">
+          <div class="p-2.5 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+            <span class="font-bold text-[#1A1A17]">F-Rank &rarr; Novice (0 EXP)</span>
+            <p class="text-[#5E5B53]">Initial adventurer grade assigned to freshly initialized guild wallets.</p>
           </div>
+          <div class="p-2.5 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+            <span class="font-bold text-[#1A1A17]">E-Rank &rarr; Apprentice (50 EXP)</span>
+            <p class="text-[#5E5B53]">Issued first quest bounty or completed beginner municipal requests.</p>
+          </div>
+          <div class="p-2.5 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+            <span class="font-bold text-[#1A1A17]">D-Rank &rarr; Proven (100 EXP)</span>
+            <p class="text-[#5E5B53]">Verified on-site photo verifier pass and settled first on-chain escrow.</p>
+          </div>
+          <div class="p-2.5 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+            <span class="font-bold text-[#1A1A17]">C-Rank &rarr; Skilled (250 EXP)</span>
+            <p class="text-[#5E5B53]">3+ completed quests across multiple cities with zero fraudulent reports.</p>
+          </div>
+          <div class="p-2.5 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+            <span class="font-bold text-[#1A1A17]">B-Rank &rarr; Veteran (450 EXP)</span>
+            <p class="text-[#5E5B53]">5+ completed quests or 450 EXP. Eligible for Sensitive Task contracts.</p>
+          </div>
+          <div class="p-2.5 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+            <span class="font-bold text-[#1A1A17]">A & S-Rank &rarr; Elite & Grandmaster</span>
+            <p class="text-[#5E5B53]">8+ and 15+ verified completions. Unrestricted guild master privileges.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Adventurer Alias Form (Clean without Email) -->
+      <div class="bg-white rounded-[12px] border border-[#E3DFD6] p-5 space-y-4">
+        <h3 class="text-[15px] font-semibold text-[#1A1A17]">Guild Adventurer Identity</h3>
+        
+        <div class="space-y-2">
+          <label class="block text-[13px] font-medium text-[#5E5B53]">Adventurer Alias / Handle</label>
           <div class="flex gap-2">
             <input 
-              v-model="emailInput"
-              type="email"
-              placeholder="adventurer@guild.sol"
+              v-model="nameInput"
+              placeholder="e.g. Frieren, Dennis, Hunter"
               class="flex-1 px-3.5 py-2.5 rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] text-[14px] text-[#1A1A17] focus:outline-none focus:border-[#1A1A17]"
             />
             <button 
               @click="handleSaveProfile"
               :disabled="isSavingProfile"
-              class="px-4 py-2.5 rounded-[8px] bg-[#1A1A17] text-white text-[13px] font-medium hover:bg-[#33332D] transition-colors"
+              class="px-5 py-2.5 rounded-[8px] bg-[#1A1A17] text-white text-[13px] font-medium hover:bg-[#33332D] transition-colors cursor-pointer"
             >
-              {{ isSavingProfile ? 'Saving...' : 'Save' }}
+              {{ isSavingProfile ? 'Saving...' : 'Update Alias' }}
             </button>
           </div>
+          <p class="text-[12px] text-[#5E5B53]">
+            Your alias is publicly bound to your Solana address on quest board dispatches and leaderboard rankings.
+          </p>
         </div>
-
-        <!-- 15-Minute Verification Loop Box -->
-        <div class="p-4 bg-[#FFFBEA] border border-[#FFD60A] rounded-[10px] space-y-3 text-[13px]">
-          <div class="flex items-start justify-between">
-            <div>
-              <span class="font-semibold text-[#1A1A17] block">15-Minute Email Verification Loop</span>
-              <p class="text-[#5E5B53] text-[12px] mt-0.5">Required to accept community quests and release escrow.</p>
-            </div>
-            <div v-if="secondsLeft > 0" class="flex items-center gap-1 px-2 py-0.5 bg-[#1A1A17] text-white rounded-[6px] font-mono text-[11px]">
-              <Clock class="w-3 h-3 text-[#FFD60A]" />
-              <span>{{ formattedTimer }}</span>
-            </div>
-          </div>
-
-          <div v-if="!userProfile?.is_email_verified" class="space-y-2 pt-1">
-            <div class="flex gap-2">
-              <input 
-                v-model="otpCode"
-                maxlength="6"
-                placeholder="6-digit code"
-                class="w-36 px-3 py-2 font-mono font-semibold bg-white border border-[#E3DFD6] rounded-[8px] text-[14px] text-[#1A1A17] focus:outline-none focus:border-[#1A1A17]"
-              />
-              <button 
-                @click="handleVerifyOtp"
-                :disabled="isVerifyingCode || !otpCode"
-                class="px-3.5 py-2 bg-[#1A1A17] text-white text-[13px] font-medium rounded-[8px] hover:bg-[#33332D] disabled:opacity-40 transition-colors"
-              >
-                {{ isVerifyingCode ? 'Verifying...' : 'Verify' }}
-              </button>
-              <button 
-                @click="handleSendOtp"
-                :disabled="isSendingCode || secondsLeft > 0"
-                class="px-3.5 py-2 bg-white border border-[#E3DFD6] text-[#1A1A17] text-[12px] font-medium rounded-[8px] hover:bg-[#F7F5F0] transition-colors"
-              >
-                {{ isSendingCode ? 'Sending...' : secondsLeft > 0 ? 'Sent' : 'Send Code' }}
-              </button>
-            </div>
-          </div>
-
-          <div v-else class="text-[13px] text-[#1E7B4F] font-medium flex items-center gap-1.5">
-            <CheckCircle2 class="w-4 h-4" />
-            <span>Verified: Full permissions to claim bounties and issue quests.</span>
-          </div>
-        </div>
-
       </div>
 
     </div>

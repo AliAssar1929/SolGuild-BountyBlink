@@ -29,8 +29,6 @@ import {
   FlaskConical,
   RotateCcw,
   Wallet,
-  User,
-  ShieldCheck,
   Shield,
   Scroll
 } from 'lucide-vue-next'
@@ -151,8 +149,13 @@ const syncRouteFromPath = () => {
     selectedTask.value = null
     fetchUserActivity()
   } else if (section === 'profile') {
-    currentTab.value = 'profile'
-    selectedTask.value = null
+    if (!publicKey.value) {
+      currentTab.value = 'feed'
+      showWalletModal.value = true
+    } else {
+      currentTab.value = 'profile'
+      selectedTask.value = null
+    }
   } else if ((section === 'tasks' || section === 'quests') && parts[1]) {
     currentTab.value = 'feed'
     const found = tasks.value.find(t => t.id === parts[1])
@@ -163,6 +166,10 @@ const syncRouteFromPath = () => {
 }
 
 const navigateTo = (tab: 'feed' | 'post' | 'activity' | 'profile', taskId?: string) => {
+  if (tab === 'profile' && !publicKey.value) {
+    showWalletModal.value = true
+    return
+  }
   currentTab.value = tab
   let targetUrl = '/quests'
   if (tab === 'post') {
@@ -367,11 +374,6 @@ const handleCreateTask = async (payload: any) => {
     return
   }
 
-  if (!userProfile.value?.is_email_verified) {
-    showProfileModal.value = true
-    return
-  }
-
   submittingPost.value = true
   try {
     // 1. Get escrow vault public key from backend
@@ -513,6 +515,7 @@ onMounted(async () => {
             Activity
           </button>
           <button 
+            v-if="publicKey"
             @click="navigateTo('profile')"
             class="font-medium transition-colors flex items-center gap-1.5"
             :class="currentTab === 'profile' ? 'text-[#1A1A17] font-semibold' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
@@ -537,14 +540,15 @@ onMounted(async () => {
 
         <button 
           v-if="publicKey"
-          @click="showProfileModal = true"
+          @click="navigateTo('profile')"
           class="h-8 px-2.5 rounded-[10px] bg-[#F7F5F0] hover:bg-[#EAE6DC] text-[#1A1A17] text-[13px] font-medium flex items-center gap-1.5 transition-colors border border-[#E3DFD6]"
-          title="Manage name & email verification"
+          title="Adventurer Guild License & Rank"
         >
-          <User class="w-3.5 h-3.5 text-[#5E5B53]" />
-          <span>Profile</span>
-          <ShieldCheck v-if="userProfile?.is_email_verified" class="w-3.5 h-3.5 text-[#1E7B4F]" />
-          <span v-else class="w-2 h-2 rounded-full bg-[#B42318]"></span>
+          <Shield class="w-3.5 h-3.5 text-[#5E5B53]" />
+          <span>{{ userProfile?.name || 'License' }}</span>
+          <span class="px-1.5 py-0.2 text-[10px] font-bold rounded bg-[#FFD60A] text-[#1A1A17]">
+            {{ userProfile?.rank || 'F' }}
+          </span>
         </button>
 
         <!-- Connect / Join / Wallet Chip -->
@@ -761,23 +765,21 @@ onMounted(async () => {
 
       </template>
 
-      <!-- ================= TAB 2: ISSUE A QUEST (EDGE-TO-EDGE EQUAL-HEIGHT SPLIT SCREEN) ================= -->
+      <!-- ================= TAB 2: ISSUE A QUEST (MATCHING ACTIVITY FULL-WIDTH SPLIT LAYOUT) ================= -->
       <section v-else-if="currentTab === 'post'" class="flex-1 flex flex-col md:flex-row overflow-hidden bg-white text-left">
         
-        <!-- Left: Balanced 3-Stage Wizard (Full height, scrollable) -->
-        <div class="flex-1 overflow-y-auto border-r border-[#E3DFD6] p-6 md:p-8 flex justify-center bg-[#F7F5F0]">
-          <div class="w-full max-w-2xl bg-white p-6 md:p-8 rounded-[16px] border border-[#E3DFD6] shadow-xs">
-            <PostTaskForm 
-              :userAddress="publicKey"
-              :submitting="submittingPost"
-              @createTask="handleCreateTask"
-              @updateFormData="(data) => livePostData = data"
-            />
-          </div>
+        <!-- Left: Form Body Container (Full-width flex-1 like Activity List) -->
+        <div class="flex-1 flex flex-col min-w-0 overflow-y-auto border-r border-[#E3DFD6]">
+          <PostTaskForm 
+            :userAddress="publicKey"
+            :submitting="submittingPost"
+            @createTask="handleCreateTask"
+            @updateFormData="(data) => livePostData = data"
+          />
         </div>
 
-        <!-- Right: Live 12-Item Specification Review Board (Full height, scrollable, equal balance) -->
-        <aside class="w-full md:w-[480px] lg:w-[520px] bg-[#F7F5F0] overflow-y-auto p-6 space-y-4 shrink-0 border-t md:border-t-0 md:border-l border-[#E3DFD6]">
+        <!-- Right: Live 12-Item Specification Review Board (420px fixed drawer like Activity Drawer) -->
+        <aside class="w-full md:w-[420px] bg-[#F7F5F0] flex flex-col shrink-0 overflow-y-auto border-t md:border-t-0 md:border-l border-[#E3DFD6] p-6 space-y-4 text-left">
           <div class="bg-white p-5 rounded-[16px] border border-[#E3DFD6] shadow-xs space-y-4">
             <div class="flex items-center justify-between border-b border-[#E3DFD6] pb-2.5">
               <div class="flex items-center gap-1.5">
@@ -1087,7 +1089,10 @@ onMounted(async () => {
     </div>
 
     <!-- Mobile Bottom Tab Bar -->
-    <nav class="md:hidden h-14 bg-white border-t border-[#E3DFD6] grid grid-cols-4 shrink-0 z-20">
+    <nav 
+      class="md:hidden h-14 bg-white border-t border-[#E3DFD6] grid shrink-0 z-20"
+      :class="publicKey ? 'grid-cols-4' : 'grid-cols-3'"
+    >
       <button 
         @click="navigateTo('feed')"
         class="flex flex-col items-center justify-center text-[12px]"
@@ -1113,6 +1118,7 @@ onMounted(async () => {
       </button>
 
       <button 
+        v-if="publicKey"
         @click="navigateTo('profile')"
         class="flex flex-col items-center justify-center text-[12px] relative"
         :class="currentTab === 'profile' ? 'text-[#1A1A17] font-semibold' : 'text-[#5E5B53]'"
