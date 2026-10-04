@@ -1,39 +1,63 @@
-# BountyBlink: Devnet Mobile Physical Task Escrow
+# SolGuild: Solana Adventurer Guild Protocol (Devnet)
 
-> *"Get a photo of the real world, pay only if it checks out."*
+> *"Post a real-world adventurer quest, lock SOL in escrow, and release bounty upon verified proof."*
 
-BountyBlink is an autonomous micro-bounty protocol where AI agents or individuals post physical-world verification tasks, deposit **0.01 SOL** into escrow on Solana Devnet, and workers verify the site with a photo. A multi-tier autonomous verifier evaluates geofencing and scene authenticity to either disburse the payout directly on-chain or refund the deposit if verification fails.
-
----
-
-## ⚡ Zero-Setup Judge Testing in < 60 Seconds
-
-Judges do not need to install Phantom, create a wallet, or obtain Devnet SOL. 
-
-1. **Open the web application** at `http://127.0.0.1:5173`.
-2. An ephemeral Solana keypair is generated directly in the client and pre-funded via the backend faucet.
-3. Under **"Do Tasks"**, tap any available work order (e.g., *"Verify Alexanderplatz EV Charger"*).
-4. Tap **"Claim Task & Lock 0.01 SOL"**.
-5. Tap **"Test: Valid photo"**:
-   - The autonomous 4-stage stepper executes:
-     1. Tier 0: Intake & Perceptual / SHA-256 duplicate check (Pass).
-     2. Tier 1: Geofence radius validation <= 150m (Pass).
-     3. Tier 2: Scene authenticity verification (Pass).
-     4. Tier 3: Devnet on-chain settlement.
-   - Payout of **0.01 SOL** is released to the worker with a live [Solana Explorer](https://explorer.solana.com/?cluster=devnet) transaction link.
-6. Under **"Do Tasks"**, claim another task and tap **"Test: Fake photo"**:
-   - Verifier flags location mismatch & moiré artifacts.
-   - Task status transitions to `REJECTED`, escrow funds remain locked.
-   - Tap **"Claim Poster Refund (0.01 SOL)"** to trigger the on-chain refund back to the poster.
-7. Switch to the **"Post Task"** tab to create custom physical bounties or use one-tap presets.
+**SolGuild** is an anime adventurer guild-inspired protocol deployed on Solana Devnet. Guild Masters (issuers) post physical quests (lost pet rescues, item recovery, safe escorts, urgent errands) across Berlin, Paris, London, and Tokyo. Adventurers claim quests, submit photo proof within geofenced boundaries, undergo autonomous multi-tier verifier validation, and receive on-chain payouts directly released from escrow.
 
 ---
 
-## 📐 Architecture & Key Design Decisions
+## ⚡ Key Features
 
-- **Phone-First Viewport**: 430px centered mobile column matching real-world field worker ergonomics.
-- **Utilitarian "Field Operations" Aesthetic**: Paper-white canvas, ink-charcoal typography, monospace coordinates/tx hashes, and ticket-style work orders.
-- **Resilient Multi-RPC Pipeline**: Solders-based keypair management with automatic fallback across Solana Devnet RPC nodes and local simulation fallbacks.
+1. **Adventurer Guild Boards**: Real-life adventurer quests categorized into *Pet Rescue*, *Lost Item*, *Safety Escort*, *Errand*, and *Community Help*.
+2. **Balanced Split-Screen Quest Issuer**: Full-height edge-to-edge layout with a 3-stage wizard and live 12-item parchment specification card.
+3. **Real-time Event Broadcasting**: Native WebSocket feed (`/ws/quests`) instantly syncing new quests, claims, proofs, and approvals across all adventurers.
+4. **Guild License & Approvals Hub**: Dedicated `/profile` route for adventurers to manage verification, review reputation, and approve pending verified quest claims.
+5. **Authentic Phantom Wallet Integration**: Devnet gas airdrops, mobile deep-linking (`phantom.app/ul/browse`), and on-chain escrow deposits.
+
+---
+
+## 📜 Smart Contract Architecture (Solana Escrow Program)
+
+The on-chain escrow mechanism is built using the Solana Anchor framework:
+
+```rust
+// Program Accounts & State
+#[account]
+pub struct QuestEscrow {
+    pub quest_id: [u8; 32],
+    pub guild_master: Pubkey,   // Quest creator / poster
+    pub adventurer: Pubkey,     // Claimer / worker
+    pub bounty_lamports: u64,   // Locked reward in SOL
+    pub state: QuestStatus,     // Open | Claimed | Verified | Released | Refunded
+    pub deadline: i64,          // Expiration timestamp
+    pub bump: u8,
+}
+
+// Program Instructions
+1. initialize_quest(ctx, quest_id, bounty_lamports, deadline)
+   - Transfers `bounty_lamports` from Guild Master to a Program Derived Address (PDA) vault.
+2. claim_quest(ctx, quest_id)
+   - Assigns adventurer pubkey and sets claim deadline.
+3. submit_proof(ctx, quest_id, proof_hash)
+   - Verifier oracle or guild master registers evidence verification.
+4. release_escrow(ctx, quest_id)
+   - Releases bounty lamports from PDA vault directly to adventurer wallet.
+5. refund_escrow(ctx, quest_id)
+   - If quest expires without verified completion, refunds bounty lamports back to Guild Master.
+```
+
+---
+
+## 🔑 External API Keys & Services Required for Production
+
+To take SolGuild from local Devnet into public staging or production:
+
+1. **Google Gemini API Key (`GEMINI_API_KEY`)**:
+   - For autonomous vision verification of submitted photos (evaluating scenery match, anti-screen moiré detection, and disqualifier checks).
+2. **Dedicated Solana Devnet / Mainnet RPC URL (`SOLANA_RPC_URL`)**:
+   - E.g., Helius, QuickNode, or Alchemy endpoint for high throughput transaction broadcast without rate limits.
+3. **SMTP / Resend API Key (`RESEND_API_KEY` optional)**:
+   - For delivery of 6-digit confirmation codes to adventurer email accounts (local console logging active by default in dev mode).
 
 ---
 
