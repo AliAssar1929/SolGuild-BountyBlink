@@ -555,81 +555,181 @@ onMounted(() => {
 
       </section>
 
-      <!-- ================= TAB 3: MY ACTIVITY (FULL-WIDTH LIST + DETAIL DRAWER) ================= -->
-      <section v-else-if="currentTab === 'activity'" class="flex-1 p-6 md:p-8 overflow-y-auto flex justify-center bg-[#F7F5F0]">
+      <!-- ================= TAB 3: MY ACTIVITY (FULL-WIDTH EDGE-TO-EDGE + RIGHT DETAIL DRAWER) ================= -->
+      <section v-else-if="currentTab === 'activity'" class="flex-1 flex flex-col md:flex-row overflow-hidden bg-white text-left">
         
-        <div class="w-full max-w-5xl bg-white p-6 md:p-8 rounded-[16px] border border-[#E3DFD6] shadow-xs space-y-5 text-left">
+        <!-- Left: Activity List Table / Rows -->
+        <div class="flex-1 flex flex-col min-w-0 overflow-y-auto border-r border-[#E3DFD6]">
           
-          <div class="flex justify-between items-center border-b border-[#E3DFD6] pb-4">
-            <div>
-              <h2 class="text-[20px] font-bold text-[#1A1A17]">My activity</h2>
-              <p class="text-[13px] text-[#5E5B53]">Audit on-chain escrow releases and refunds</p>
+          <!-- Sticky Header inside activity pane -->
+          <div class="p-4 md:p-6 border-b border-[#E3DFD6] bg-white sticky top-0 z-10 space-y-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <h1 class="text-[20px] font-bold text-[#1A1A17] tracking-tight">My activity</h1>
+                <p class="text-[13px] text-[#5E5B53] mt-0.5">Audit on-chain escrow releases, verifications, and refunds</p>
+              </div>
+              <button 
+                @click="resetDemo" 
+                class="h-8 px-3 rounded-[10px] bg-[#F7F5F0] hover:bg-[#EAE6DC] text-[#1A1A17] text-[13px] font-medium flex items-center gap-1.5 transition-colors"
+                title="Reset demo tasks to initial state"
+              >
+                <RotateCcw class="w-3.5 h-3.5" />
+                <span>Reset demo</span>
+              </button>
             </div>
-            <button @click="resetDemo" class="text-[13px] text-[#5E5B53] hover:text-[#1A1A17] flex items-center gap-1 font-medium">
-              <RotateCcw class="w-3.5 h-3.5" />
-              <span>Reset</span>
-            </button>
+
+            <!-- Segmented Sub-filters -->
+            <div class="flex items-center gap-1 bg-[#F7F5F0] p-1 rounded-[10px] w-fit text-[13px]">
+              <button 
+                @click="activityTab = 'ALL'"
+                class="px-3 py-1 rounded-[8px] font-medium transition-colors"
+                :class="activityTab === 'ALL' ? 'bg-white text-[#1A1A17] shadow-xs' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
+              >
+                All ({{ tasks.length }})
+              </button>
+              <button 
+                @click="activityTab = 'POSTED'"
+                class="px-3 py-1 rounded-[8px] font-medium transition-colors"
+                :class="activityTab === 'POSTED' ? 'bg-white text-[#1A1A17] shadow-xs' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
+              >
+                Posted by me
+              </button>
+              <button 
+                @click="activityTab = 'WORKING'"
+                class="px-3 py-1 rounded-[8px] font-medium transition-colors"
+                :class="activityTab === 'WORKING' ? 'bg-white text-[#1A1A17] shadow-xs' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
+              >
+                In progress
+              </button>
+              <button 
+                @click="activityTab = 'COMPLETED'"
+                class="px-3 py-1 rounded-[8px] font-medium transition-colors"
+                :class="activityTab === 'COMPLETED' ? 'bg-white text-[#1A1A17] shadow-xs' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
+              >
+                Completed
+              </button>
+            </div>
           </div>
 
-          <!-- Sub-tabs: Posted, Working, Completed -->
-          <div class="flex items-center gap-2 border-b border-[#E3DFD6] pb-3 text-[13px]">
-            <button 
-              @click="activityTab = 'ALL'"
-              class="px-3 py-1.5 rounded-[8px] font-medium transition-colors"
-              :class="activityTab === 'ALL' ? 'bg-[#1A1A17] text-white' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
-            >
-              All ({{ tasks.length }})
-            </button>
-            <button 
-              @click="activityTab = 'POSTED'"
-              class="px-3 py-1.5 rounded-[8px] font-medium transition-colors"
-              :class="activityTab === 'POSTED' ? 'bg-[#1A1A17] text-white' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
-            >
-              Posted by me
-            </button>
-            <button 
-              @click="activityTab = 'WORKING'"
-              class="px-3 py-1.5 rounded-[8px] font-medium transition-colors"
-              :class="activityTab === 'WORKING' ? 'bg-[#1A1A17] text-white' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
-            >
-              In progress
-            </button>
-            <button 
-              @click="activityTab = 'COMPLETED'"
-              class="px-3 py-1.5 rounded-[8px] font-medium transition-colors"
-              :class="activityTab === 'COMPLETED' ? 'bg-[#1A1A17] text-white' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
-            >
-              Completed
-            </button>
-          </div>
-
-          <!-- Activity Rows -->
-          <div class="divide-y divide-[#E3DFD6] text-[15px]">
+          <!-- Activity Rows List -->
+          <div class="divide-y divide-[#E3DFD6] flex-1">
             <div 
               v-for="t in filteredActivityTasks" 
               :key="t.id" 
               @click="activitySelectedTask = t"
-              class="py-3.5 flex justify-between items-center cursor-pointer hover:bg-[#F7F5F0] px-3 rounded-[8px] transition-colors"
+              class="px-4 md:px-6 py-4 flex items-center justify-between cursor-pointer transition-colors text-left"
+              :class="activitySelectedTask?.id === t.id ? 'bg-[#FFFBEA]' : 'hover:bg-[#FBF9F5]'"
             >
-              <div>
-                <h4 class="font-medium text-[#1A1A17]">{{ t.title }}</h4>
+              <div class="min-w-0 pr-4 space-y-1">
+                <div class="flex items-center gap-2">
+                  <h3 class="font-medium text-[15px] text-[#1A1A17] truncate">{{ t.title }}</h3>
+                  <StatusWord :status="t.status" />
+                </div>
                 <div class="flex items-center gap-2 text-[13px] text-[#5E5B53]">
                   <span>{{ t.category || 'General' }}</span>
                   <span>&middot;</span>
                   <span>{{ t.city || 'Berlin' }}</span>
                   <span>&middot;</span>
-                  <span class="font-semibold text-[#1A1A17]">{{ t.reward_sol.toFixed(2) }} SOL</span>
+                  <span class="font-medium text-[#1A1A17]">{{ t.reward_sol.toFixed(2) }} SOL</span>
                 </div>
               </div>
-              <div class="text-right space-y-1">
-                <StatusWord :status="t.status" />
-                <div v-if="t.payout_tx_sig" class="text-[12px]">
-                  <TxLink :signature="t.payout_tx_sig" />
+
+              <div class="shrink-0 flex items-center gap-3">
+                <div v-if="t.payout_tx_sig" class="hidden sm:block">
+                  <TxLink :signature="t.payout_tx_sig" label="Payout" />
                 </div>
+                <div v-else-if="t.refund_tx_sig" class="hidden sm:block">
+                  <TxLink :signature="t.refund_tx_sig" label="Refund" />
+                </div>
+                <div class="text-[13px] text-[#5E5B53] font-medium">
+                  Inspect &rarr;
+                </div>
+              </div>
+            </div>
+
+            <div v-if="filteredActivityTasks.length === 0" class="p-12 text-center text-[#5E5B53] text-[14px]">
+              No tasks found in this view.
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Right: Detail Inspection Drawer (420px fixed on desktop) -->
+        <aside 
+          v-if="activitySelectedTask"
+          class="w-full md:w-[420px] bg-[#F7F5F0] flex flex-col shrink-0 overflow-y-auto border-t md:border-t-0 md:border-l border-[#E3DFD6] p-6 space-y-5 text-left"
+        >
+          <div class="flex items-center justify-between">
+            <span class="text-[12px] font-semibold text-[#5E5B53] uppercase tracking-wider">Escrow Audit Detail</span>
+            <button 
+              @click="activitySelectedTask = null"
+              class="text-[13px] text-[#5E5B53] hover:text-[#1A1A17] font-medium"
+            >
+              Close
+            </button>
+          </div>
+
+          <div class="bg-white p-5 rounded-[12px] border border-[#E3DFD6] space-y-3">
+            <div class="space-y-1">
+              <h2 class="text-[18px] font-semibold text-[#1A1A17] leading-snug">{{ activitySelectedTask.title }}</h2>
+              <RewardLine :status="activitySelectedTask.status" :amount="activitySelectedTask.reward_sol" />
+            </div>
+
+            <div class="pt-2 border-t border-[#E3DFD6] space-y-2 text-[13px]">
+              <div class="flex justify-between">
+                <span class="text-[#5E5B53]">Location</span>
+                <span class="font-medium text-[#1A1A17]">{{ activitySelectedTask.place_name || activitySelectedTask.city || 'Berlin' }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-[#5E5B53]">Poster</span>
+                <span class="font-mono text-[#1A1A17] text-[12px]">{{ activitySelectedTask.poster_address.slice(0, 6) }}...{{ activitySelectedTask.poster_address.slice(-4) }}</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span class="text-[#5E5B53]">Current Status</span>
+                <StatusWord :status="activitySelectedTask.status" />
               </div>
             </div>
           </div>
 
+          <!-- On-Chain Signatures & Settlement Audit -->
+          <div class="bg-white p-5 rounded-[12px] border border-[#E3DFD6] space-y-3">
+            <h3 class="text-[14px] font-semibold text-[#1A1A17]">On-Chain Settlement</h3>
+            
+            <div class="space-y-2 text-[13px]">
+              <div>
+                <span class="text-[#5E5B53] block text-[11px] uppercase">Lock In Escrow Tx:</span>
+                <TxLink v-if="activitySelectedTask.fund_tx_sig" :signature="activitySelectedTask.fund_tx_sig" />
+                <span v-else class="text-[#5E5B53] italic">Simulated devnet genesis lock</span>
+              </div>
+
+              <div v-if="activitySelectedTask.payout_tx_sig" class="pt-2 border-t border-[#E3DFD6]">
+                <span class="text-[#5E5B53] block text-[11px] uppercase">Payout Release Tx:</span>
+                <TxLink :signature="activitySelectedTask.payout_tx_sig" />
+              </div>
+
+              <div v-if="activitySelectedTask.refund_tx_sig" class="pt-2 border-t border-[#E3DFD6]">
+                <span class="text-[#5E5B53] block text-[11px] uppercase">Escrow Refund Tx:</span>
+                <TxLink :signature="activitySelectedTask.refund_tx_sig" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Instructions & Verification Rules -->
+          <div class="bg-white p-5 rounded-[12px] border border-[#E3DFD6] space-y-2 text-[13px]">
+            <h3 class="text-[14px] font-semibold text-[#1A1A17]">Task Requirements</h3>
+            <p class="text-[#5E5B53]">{{ activitySelectedTask.instruction }}</p>
+            <div v-if="activitySelectedTask.target_description" class="pt-2 text-[12px] text-[#5E5B53]">
+              <strong class="text-[#1A1A17]">What verifier checks:</strong> {{ activitySelectedTask.target_description }}
+            </div>
+          </div>
+        </aside>
+
+        <!-- Empty state prompt for desktop when no task is selected -->
+        <div 
+          v-else 
+          class="hidden md:flex w-[420px] bg-[#F7F5F0] border-l border-[#E3DFD6] shrink-0 items-center justify-center p-8 text-center text-[#5E5B53] text-[14px]"
+        >
+          Select an activity row to audit its on-chain settlement, verifications, and escrow status.
         </div>
 
       </section>
