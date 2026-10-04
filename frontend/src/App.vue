@@ -338,8 +338,8 @@ onMounted(() => {
       <!-- ================= TAB 1: FIND TASKS (MAP-FIRST APP) ================= -->
       <template v-if="currentTab === 'feed'">
         
-        <!-- 400px Left Panel (Single Replacement Pattern) -->
-        <section class="w-full md:w-[400px] h-1/2 md:h-full bg-white md:border-r border-[#E3DFD6] flex flex-col shrink-0 z-10 shadow-xs order-2 md:order-1">
+        <!-- Left Panel (Single Replacement Pattern: expanded width for location & filter breathing room) -->
+        <section class="w-full md:w-[460px] lg:w-[480px] xl:w-[500px] h-1/2 md:h-full bg-white md:border-r border-[#E3DFD6] flex flex-col shrink-0 z-10 shadow-xs order-2 md:order-1">
           
           <!-- DETAIL STATE IN LEFT PANEL -->
           <div v-if="selectedTask" class="h-full flex flex-col justify-between overflow-y-auto text-left">
