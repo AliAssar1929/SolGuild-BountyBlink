@@ -1,19 +1,72 @@
 @import "tailwindcss";
 
 @layer base {
+  :root {
+    --color-bg: #090A0F;
+    --color-surface: #12141C;
+    --color-surface-elevated: #181B26;
+    --color-border: #232738;
+    --color-border-glow: #3B82F6;
+    --color-accent-sol: #9945FF;
+    --color-accent-teal: #14F195;
+    --color-accent-orange: #FF6B00;
+  }
+
   body {
-    background-color: #F8F6F0;
-    color: #161614;
-    font-family: -apple-system, BlinkMacSystemFont, "Inter Tight", "Segoe UI", Roboto, sans-serif;
+    background-color: #08090D;
+    color: #F1F5F9;
+    font-family: -apple-system, BlinkMacSystemFont, "Plus Jakarta Sans", "Inter", "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
   }
 }
 
 .font-mono {
-  font-family: "Geist Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  font-family: "JetBrains Mono", "Geist Mono", monospace;
   font-variant-numeric: tabular-nums;
 }
 
-.ticket-border {
-  background-image: radial-gradient(circle at 0.5rem 0, transparent 0.5rem, #F8F6F0 0.5rem);
+/* Modern Web3 / Magic UI glow effects */
+.magic-glow {
+  position: relative;
+}
+.magic-glow::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  background: linear-gradient(90deg, #9945FF, #14F195, #3B82F6);
+  border-radius: inherit;
+  z-index: -1;
+  opacity: 0.25;
+  transition: opacity 0.3s ease;
+}
+.magic-glow:hover::before {
+  opacity: 0.7;
+}
+
+/* Shimmer animation */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.shimmer-btn {
+  position: relative;
+  overflow: hidden;
+}
+.shimmer-btn::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+  transform: translateX(-100%);
+  animation: shimmer 2.5s infinite;
+}
+
+/* Grid pattern background */
+.bg-grid-pattern {
+  background-size: 32px 32px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
 }

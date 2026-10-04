@@ -213,6 +213,7 @@ async def submit_evidence(
 
     # Run verification pipeline
     verification = verifier_service.verify_submission(
+        task_instruction=task.instruction,
         task_target_desc=task.target_description,
         task_lat=task.latitude,
         task_lon=task.longitude,
