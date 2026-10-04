@@ -17,6 +17,9 @@ import UserProfileModal from './components/UserProfileModal.vue'
 import EmptyState from './components/EmptyState.vue'
 import { useSolPrice } from './composables/useSolPrice'
 
+import ProfileView from './components/ProfileView.vue'
+import { useGuildSocket, type GuildEvent } from './composables/useGuildSocket'
+
 import {
   ArrowLeft,
   Camera,
@@ -27,7 +30,9 @@ import {
   RotateCcw,
   Wallet,
   User,
-  ShieldCheck
+  ShieldCheck,
+  Shield,
+  Scroll
 } from 'lucide-vue-next'
 
 const { 
@@ -73,7 +78,7 @@ interface Task {
 
 // Navigation & Modals
 const showLanding = ref(false)
-const currentTab = ref<'feed' | 'post' | 'activity'>('feed')
+const currentTab = ref<'feed' | 'post' | 'activity' | 'profile'>('feed')
 const showDemoDrawer = ref(false)
 const showWalletModal = ref(false)
 const showProfileModal = ref(false)
@@ -82,7 +87,7 @@ const showLocationPrompt = ref(true)
 // Post a task live sticky data
 const livePostData = ref<any>({
   title: '',
-  category: 'Infrastructure',
+  category: 'Pet Rescue',
   placeName: '',
   fullAddress: '',
   city: 'Berlin',
@@ -91,8 +96,8 @@ const livePostData = ref<any>({
   longitude: 13.4050,
   radiusMeters: 150,
   photosRequired: 1,
-  finishWindowMinutes: 10,
-  rewardSol: 0.01,
+  finishWindowMinutes: 15,
+  rewardSol: 0.02,
   instruction: '',
   targetDescription: '',
   forbiddenDescription: '',
@@ -102,7 +107,7 @@ const livePostData = ref<any>({
 // Activity Tab Filter & Isolated Data
 const activityTab = ref<'ALL' | 'POSTED' | 'WORKING' | 'COMPLETED'>('ALL')
 const activitySelectedTask = ref<Task | null>(null)
-const userActivityData = ref<any>({ posted_tasks: [], claimed_tasks: [], submissions: [] })
+const userActivityData = ref<any>({ posted_tasks: [], claimed_tasks: [], submissions: [], pending_approvals: [] })
 
 // Tasks & Filters
 const tasks = ref<Task[]>([])
@@ -119,12 +124,26 @@ const isSubmitting = ref(false)
 const verificationResult = ref<any>(null)
 const currentStep = ref<number>(0)
 
-// URL Hash Routing synchronization
-const syncRouteFromHash = () => {
-  const hash = window.location.hash.replace(/^#\/?/, '')
-  const parts = hash.split('/')
+// Realtime WebSocket Listener: Auto-update on new data arrival without polling
+useGuildSocket((event: GuildEvent) => {
+  console.log('⚡ SolGuild Event Received:', event)
+  fetchTasks()
+  if (publicKey.value) {
+    fetchUserActivity()
+  }
+})
+
+// Clean HTML5 History Routing (No # Hash)
+const syncRouteFromPath = () => {
+  // Support both clean pathname and legacy hash fallback
+  let path = window.location.pathname
+  if (window.location.hash) {
+    path = window.location.hash.replace(/^#\/?/, '/')
+  }
+  const parts = path.replace(/^\//, '').split('/')
   const section = parts[0]
-  if (section === 'post') {
+
+  if (section === 'post' || section === 'issue') {
     currentTab.value = 'post'
     selectedTask.value = null
   } else if (section === 'activity') {
@@ -132,8 +151,9 @@ const syncRouteFromHash = () => {
     selectedTask.value = null
     fetchUserActivity()
   } else if (section === 'profile') {
-    showProfileModal.value = true
-  } else if (section === 'tasks' && parts[1]) {
+    currentTab.value = 'profile'
+    selectedTask.value = null
+  } else if ((section === 'tasks' || section === 'quests') && parts[1]) {
     currentTab.value = 'feed'
     const found = tasks.value.find(t => t.id === parts[1])
     if (found) selectedTask.value = found
@@ -142,17 +162,28 @@ const syncRouteFromHash = () => {
   }
 }
 
-const navigateTo = (tab: 'feed' | 'post' | 'activity', taskId?: string) => {
+const navigateTo = (tab: 'feed' | 'post' | 'activity' | 'profile', taskId?: string) => {
   currentTab.value = tab
-  if (taskId) {
-    window.location.hash = `/tasks/${taskId}`
+  let targetUrl = '/quests'
+  if (tab === 'post') {
+    targetUrl = '/issue'
+    selectedTask.value = null
+  } else if (tab === 'activity') {
+    targetUrl = '/activity'
+    selectedTask.value = null
+  } else if (tab === 'profile') {
+    targetUrl = '/profile'
+    selectedTask.value = null
   } else if (tab === 'feed') {
-    selectedTask.value = null
-    window.location.hash = '/tasks'
-  } else {
-    selectedTask.value = null
-    window.location.hash = `/${tab}`
+    if (taskId) {
+      targetUrl = `/quests/${taskId}`
+    } else {
+      selectedTask.value = null
+      targetUrl = '/quests'
+    }
   }
+
+  window.history.pushState({}, '', targetUrl)
 }
 
 const fetchUserActivity = async () => {
@@ -190,7 +221,7 @@ const selectTask = (task: Task) => {
   selectedTask.value = task
   verificationResult.value = null
   currentStep.value = 0
-  window.location.hash = `/tasks/${task.id}`
+  navigateTo('feed', task.id)
 }
 
 const handleUseLocation = () => {
@@ -438,8 +469,8 @@ onMounted(async () => {
   if (publicKey.value) {
     await fetchUserActivity()
   }
-  syncRouteFromHash()
-  window.addEventListener('hashchange', syncRouteFromHash)
+  syncRouteFromPath()
+  window.addEventListener('popstate', syncRouteFromPath)
 })
 </script>
 
@@ -454,8 +485,9 @@ onMounted(async () => {
       <!-- Brand & Tabs -->
       <div class="flex items-center gap-6">
         <div class="flex items-center gap-2 cursor-pointer" @click="showLanding = true">
-          <span class="font-bold text-[17px] tracking-tight">BountyBlink</span>
-          <span class="text-[12px] text-[#5E5B53]">Devnet</span>
+          <Shield class="w-5 h-5 text-[#1A1A17]" />
+          <span class="font-bold text-[17px] tracking-tight">SolGuild</span>
+          <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#FFD60A] text-[#1A1A17]">Devnet</span>
         </div>
 
         <nav class="hidden md:flex items-center gap-5 text-[15px]">
@@ -464,21 +496,31 @@ onMounted(async () => {
             class="font-medium transition-colors"
             :class="currentTab === 'feed' ? 'text-[#1A1A17] font-semibold' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
           >
-            Find tasks
+            Guild Quests
           </button>
           <button 
             @click="navigateTo('post')"
             class="font-medium transition-colors"
             :class="currentTab === 'post' ? 'text-[#1A1A17] font-semibold' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
           >
-            Post a task
+            Issue a Quest
           </button>
           <button 
             @click="navigateTo('activity')"
             class="font-medium transition-colors"
             :class="currentTab === 'activity' ? 'text-[#1A1A17] font-semibold' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
           >
-            My activity
+            Activity
+          </button>
+          <button 
+            @click="navigateTo('profile')"
+            class="font-medium transition-colors flex items-center gap-1.5"
+            :class="currentTab === 'profile' ? 'text-[#1A1A17] font-semibold' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
+          >
+            <span>Guild License</span>
+            <span v-if="userActivityData?.pending_approvals?.length" class="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-[#FFD60A] text-[#1A1A17]">
+              {{ userActivityData.pending_approvals.length }}
+            </span>
           </button>
         </nav>
       </div>
@@ -535,8 +577,8 @@ onMounted(async () => {
       <!-- ================= TAB 1: FIND TASKS (MAP-FIRST APP) ================= -->
       <template v-if="currentTab === 'feed'">
         
-        <!-- Left Panel (Single Replacement Pattern: expanded width for location & filter breathing room) -->
-        <section class="w-full md:w-[460px] lg:w-[480px] xl:w-[500px] h-1/2 md:h-full bg-white md:border-r border-[#E3DFD6] flex flex-col shrink-0 z-10 shadow-xs order-2 md:order-1">
+        <!-- Left Panel (+20% width for location & filter breathing room) -->
+        <section class="w-full md:w-[550px] lg:w-[580px] xl:w-[600px] h-1/2 md:h-full bg-white md:border-r border-[#E3DFD6] flex flex-col shrink-0 z-10 shadow-xs order-2 md:order-1">
           
           <!-- DETAIL STATE IN LEFT PANEL -->
           <div v-if="selectedTask" class="h-full flex flex-col justify-between overflow-y-auto text-left">
@@ -719,13 +761,12 @@ onMounted(async () => {
 
       </template>
 
-      <!-- ================= TAB 2: POST A TASK (FULL-WIDTH 60/40 LIVE PREVIEW) ================= -->
-      <section v-else-if="currentTab === 'post'" class="flex-1 p-6 md:p-8 overflow-y-auto flex justify-center bg-[#F7F5F0]">
+      <!-- ================= TAB 2: ISSUE A QUEST (EDGE-TO-EDGE EQUAL-HEIGHT SPLIT SCREEN) ================= -->
+      <section v-else-if="currentTab === 'post'" class="flex-1 flex flex-col md:flex-row overflow-hidden bg-white text-left">
         
-        <div class="w-full max-w-6xl grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
-          
-          <!-- Left 60%: Sectioned Form -->
-          <div class="md:col-span-7">
+        <!-- Left: Balanced 3-Stage Wizard (Full height, scrollable) -->
+        <div class="flex-1 overflow-y-auto border-r border-[#E3DFD6] p-6 md:p-8 flex justify-center bg-[#F7F5F0]">
+          <div class="w-full max-w-2xl bg-white p-6 md:p-8 rounded-[16px] border border-[#E3DFD6] shadow-xs">
             <PostTaskForm 
               :userAddress="publicKey"
               :submitting="submittingPost"
@@ -733,110 +774,115 @@ onMounted(async () => {
               @updateFormData="(data) => livePostData = data"
             />
           </div>
-
-          <!-- Right 40%: Sticky Live Specification Review (12 Required Fields) -->
-          <div class="md:col-span-5 sticky top-6 space-y-4 text-left">
-            <div class="bg-white p-5 rounded-[16px] border border-[#E3DFD6] shadow-xs space-y-4">
-              <div class="flex items-center justify-between border-b border-[#E3DFD6] pb-2.5">
-                <span class="text-[12px] font-semibold text-[#5E5B53] uppercase tracking-wider">Live Task Review</span>
-                <span class="text-[12px] font-mono font-medium text-[#1E7B4F]">Solana Devnet</span>
-              </div>
-              
-              <!-- Mini map of target coordinate -->
-              <div class="h-40 bg-[#F7F5F0] rounded-[10px] border border-[#E3DFD6] overflow-hidden">
-                <MapCanvas 
-                  :tasks="tasks" 
-                  :selectedTask="selectedTask" 
-                />
-              </div>
-
-              <!-- Complete 12-Item Field Specification Grid -->
-              <div class="grid grid-cols-2 gap-3 text-[12px] divide-y-0">
-                <!-- 1. Title -->
-                <div class="col-span-2 p-2.5 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
-                  <span class="text-[#5E5B53] text-[11px] font-medium block">1. Task Title</span>
-                  <div class="font-semibold text-[#1A1A17] text-[13px] leading-tight">
-                    {{ livePostData.title || '-' }}
-                  </div>
-                </div>
-
-                <!-- 2. Category -->
-                <div class="p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
-                  <span class="text-[#5E5B53] text-[11px] font-medium block">2. Category</span>
-                  <div class="font-medium text-[#1A1A17]">{{ livePostData.category || '-' }}</div>
-                </div>
-
-                <!-- 3. Escrow Deposit -->
-                <div class="p-2 bg-[#FFFBEA] border border-[#FFD60A]/60 rounded-[8px] space-y-0.5">
-                  <span class="text-[#5E5B53] text-[11px] font-medium block">3. Escrow Deposit</span>
-                  <div class="font-bold text-[#1A1A17]">
-                    {{ livePostData.rewardSol ? `${livePostData.rewardSol.toFixed(2)} SOL (${getUsdValue(livePostData.rewardSol)})` : '-' }}
-                  </div>
-                </div>
-
-                <!-- 4. Place / Landmark -->
-                <div class="p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
-                  <span class="text-[#5E5B53] text-[11px] font-medium block">4. Place / Landmark</span>
-                  <div class="font-medium text-[#1A1A17] truncate">{{ livePostData.placeName || '-' }}</div>
-                </div>
-
-                <!-- 5. City & Country -->
-                <div class="p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
-                  <span class="text-[#5E5B53] text-[11px] font-medium block">5. City & Country</span>
-                  <div class="font-medium text-[#1A1A17]">{{ livePostData.city && livePostData.country ? `${livePostData.city}, ${livePostData.country}` : '-' }}</div>
-                </div>
-
-                <!-- 6. Full Address -->
-                <div class="col-span-2 p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
-                  <span class="text-[#5E5B53] text-[11px] font-medium block">6. Full Address</span>
-                  <div class="font-medium text-[#1A1A17] line-clamp-1">{{ livePostData.fullAddress || '-' }}</div>
-                </div>
-
-                <!-- 7. Coordinates -->
-                <div class="p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
-                  <span class="text-[#5E5B53] text-[11px] font-medium block">7. GPS Coordinates</span>
-                  <div class="font-mono text-[#1A1A17] text-[11px]">
-                    {{ livePostData.latitude && livePostData.longitude ? `${livePostData.latitude.toFixed(4)}, ${livePostData.longitude.toFixed(4)}` : '-' }}
-                  </div>
-                </div>
-
-                <!-- 8. Boundary Radius -->
-                <div class="p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
-                  <span class="text-[#5E5B53] text-[11px] font-medium block">8. Geofence Radius</span>
-                  <div class="font-medium text-[#1A1A17]">{{ livePostData.radiusMeters ? `${livePostData.radiusMeters} meters` : '-' }}</div>
-                </div>
-
-                <!-- 9. Must Show -->
-                <div class="col-span-2 p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
-                  <span class="text-[#5E5B53] text-[11px] font-medium block">9. Target Photo Spec</span>
-                  <div class="text-[#1A1A17]">{{ livePostData.targetDescription || '-' }}</div>
-                </div>
-
-                <!-- 10. Disqualifiers -->
-                <div class="col-span-2 p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
-                  <span class="text-[#5E5B53] text-[11px] font-medium block">10. Forbidden / Disqualifiers</span>
-                  <div class="text-[#1A1A17]">{{ livePostData.forbiddenDescription || '-' }}</div>
-                </div>
-
-                <!-- 11. Completion Window -->
-                <div class="p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
-                  <span class="text-[#5E5B53] text-[11px] font-medium block">11. Finish Window</span>
-                  <div class="font-medium text-[#1A1A17]">{{ livePostData.finishWindowMinutes ? `${livePostData.finishWindowMinutes} min` : '-' }}</div>
-                </div>
-
-                <!-- 12. Reference Photos -->
-                <div class="p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
-                  <span class="text-[#5E5B53] text-[11px] font-medium block">12. Reference Image</span>
-                  <div class="font-medium text-[#1A1A17]">
-                    {{ livePostData.referencePhotos && livePostData.referencePhotos.length > 0 ? `${livePostData.referencePhotos.length} attached` : '-' }}
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
         </div>
+
+        <!-- Right: Live 12-Item Specification Review Board (Full height, scrollable, equal balance) -->
+        <aside class="w-full md:w-[480px] lg:w-[520px] bg-[#F7F5F0] overflow-y-auto p-6 space-y-4 shrink-0 border-t md:border-t-0 md:border-l border-[#E3DFD6]">
+          <div class="bg-white p-5 rounded-[16px] border border-[#E3DFD6] shadow-xs space-y-4">
+            <div class="flex items-center justify-between border-b border-[#E3DFD6] pb-2.5">
+              <div class="flex items-center gap-1.5">
+                <Scroll class="w-4 h-4 text-[#FFD60A]" />
+                <span class="text-[12px] font-bold text-[#1A1A17] uppercase tracking-wider">Quest Parchment Spec</span>
+              </div>
+              <span class="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-[#EBF5EF] text-[#1E7B4F]">Solana Devnet</span>
+            </div>
+            
+            <!-- Mini map of target coordinate -->
+            <div class="h-44 bg-[#F7F5F0] rounded-[10px] border border-[#E3DFD6] overflow-hidden relative">
+              <MapCanvas 
+                :tasks="tasks" 
+                :selectedTask="selectedTask" 
+              />
+              <div class="absolute bottom-2 left-2 px-2 py-0.5 bg-white/90 backdrop-blur rounded text-[11px] font-medium text-[#1A1A17] shadow-xs">
+                📍 Target Area
+              </div>
+            </div>
+
+            <!-- Complete 12-Item Field Specification Grid -->
+            <div class="grid grid-cols-2 gap-2.5 text-[12px]">
+              <!-- 1. Title -->
+              <div class="col-span-2 p-2.5 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+                <span class="text-[#5E5B53] text-[11px] font-medium block">1. Quest Title</span>
+                <div class="font-semibold text-[#1A1A17] text-[13px] leading-tight">
+                  {{ livePostData.title || '-' }}
+                </div>
+              </div>
+
+              <!-- 2. Category -->
+              <div class="p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+                <span class="text-[#5E5B53] text-[11px] font-medium block">2. Category</span>
+                <div class="font-medium text-[#1A1A17]">{{ livePostData.category || '-' }}</div>
+              </div>
+
+              <!-- 3. Escrow Deposit -->
+              <div class="p-2 bg-[#FFFBEA] border border-[#FFD60A]/60 rounded-[8px] space-y-0.5">
+                <span class="text-[#5E5B53] text-[11px] font-medium block">3. Escrow Bounty</span>
+                <div class="font-bold text-[#1A1A17]">
+                  {{ livePostData.rewardSol ? `${livePostData.rewardSol.toFixed(2)} SOL (${getUsdValue(livePostData.rewardSol)})` : '-' }}
+                </div>
+              </div>
+
+              <!-- 4. Place / Landmark -->
+              <div class="p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+                <span class="text-[#5E5B53] text-[11px] font-medium block">4. Place / Landmark</span>
+                <div class="font-medium text-[#1A1A17] truncate">{{ livePostData.placeName || '-' }}</div>
+              </div>
+
+              <!-- 5. City & Country -->
+              <div class="p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+                <span class="text-[#5E5B53] text-[11px] font-medium block">5. Realm & City</span>
+                <div class="font-medium text-[#1A1A17]">{{ livePostData.city && livePostData.country ? `${livePostData.city}, ${livePostData.country}` : '-' }}</div>
+              </div>
+
+              <!-- 6. Full Address -->
+              <div class="col-span-2 p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+                <span class="text-[#5E5B53] text-[11px] font-medium block">6. Waypoint Address</span>
+                <div class="font-medium text-[#1A1A17] line-clamp-1">{{ livePostData.fullAddress || '-' }}</div>
+              </div>
+
+              <!-- 7. Coordinates -->
+              <div class="p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+                <span class="text-[#5E5B53] text-[11px] font-medium block">7. GPS Coordinates</span>
+                <div class="font-mono text-[#1A1A17] text-[11px]">
+                  {{ livePostData.latitude && livePostData.longitude ? `${livePostData.latitude.toFixed(4)}, ${livePostData.longitude.toFixed(4)}` : '-' }}
+                </div>
+              </div>
+
+              <!-- 8. Boundary Radius -->
+              <div class="p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+                <span class="text-[#5E5B53] text-[11px] font-medium block">8. Discovery Radius</span>
+                <div class="font-medium text-[#1A1A17]">{{ livePostData.radiusMeters ? `${livePostData.radiusMeters} meters` : '-' }}</div>
+              </div>
+
+              <!-- 9. Must Show -->
+              <div class="col-span-2 p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+                <span class="text-[#5E5B53] text-[11px] font-medium block">9. Verification Target</span>
+                <div class="text-[#1A1A17]">{{ livePostData.targetDescription || '-' }}</div>
+              </div>
+
+              <!-- 10. Disqualifiers -->
+              <div class="col-span-2 p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+                <span class="text-[#5E5B53] text-[11px] font-medium block">10. Guild Disqualifiers</span>
+                <div class="text-[#1A1A17]">{{ livePostData.forbiddenDescription || '-' }}</div>
+              </div>
+
+              <!-- 11. Completion Window -->
+              <div class="p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+                <span class="text-[#5E5B53] text-[11px] font-medium block">11. Quest Window</span>
+                <div class="font-medium text-[#1A1A17]">{{ livePostData.finishWindowMinutes ? `${livePostData.finishWindowMinutes} min` : '-' }}</div>
+              </div>
+
+              <!-- 12. Reference Photos -->
+              <div class="p-2 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
+                <span class="text-[#5E5B53] text-[11px] font-medium block">12. Reference Scroll</span>
+                <div class="font-medium text-[#1A1A17]">
+                  {{ livePostData.referencePhotos && livePostData.referencePhotos.length > 0 ? `${livePostData.referencePhotos.length} attached` : '-' }}
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </aside>
 
       </section>
 
@@ -1026,32 +1072,53 @@ onMounted(async () => {
 
       </section>
 
+      <!-- ================= TAB 4: GUILD LICENSE & PENDING APPROVALS ================= -->
+      <section v-else-if="currentTab === 'profile'" class="flex-1 flex overflow-hidden bg-white text-left">
+        <ProfileView 
+          :address="publicKey"
+          :userProfile="userProfile"
+          :balance="balance"
+          @profileUpdated="refreshProfile"
+          @questApproved="fetchUserActivity"
+          @openQuest="(id) => navigateTo('feed', id)"
+        />
+      </section>
+
     </div>
 
     <!-- Mobile Bottom Tab Bar -->
-    <nav class="md:hidden h-14 bg-white border-t border-[#E3DFD6] grid grid-cols-3 shrink-0 z-20">
+    <nav class="md:hidden h-14 bg-white border-t border-[#E3DFD6] grid grid-cols-4 shrink-0 z-20">
       <button 
-        @click="currentTab = 'feed'"
+        @click="navigateTo('feed')"
         class="flex flex-col items-center justify-center text-[12px]"
         :class="currentTab === 'feed' ? 'text-[#1A1A17] font-semibold' : 'text-[#5E5B53]'"
       >
-        <span>Find</span>
+        <span>Quests</span>
       </button>
 
       <button 
-        @click="currentTab = 'post'"
+        @click="navigateTo('post')"
         class="flex flex-col items-center justify-center text-[12px]"
         :class="currentTab === 'post' ? 'text-[#1A1A17] font-semibold' : 'text-[#5E5B53]'"
       >
-        <span>Post</span>
+        <span>Issue</span>
       </button>
 
       <button 
-        @click="currentTab = 'activity'"
+        @click="navigateTo('activity')"
         class="flex flex-col items-center justify-center text-[12px]"
         :class="currentTab === 'activity' ? 'text-[#1A1A17] font-semibold' : 'text-[#5E5B53]'"
       >
         <span>Activity</span>
+      </button>
+
+      <button 
+        @click="navigateTo('profile')"
+        class="flex flex-col items-center justify-center text-[12px] relative"
+        :class="currentTab === 'profile' ? 'text-[#1A1A17] font-semibold' : 'text-[#5E5B53]'"
+      >
+        <span>License</span>
+        <span v-if="userActivityData?.pending_approvals?.length" class="absolute top-2 right-4 w-2 h-2 rounded-full bg-[#FFD60A]"></span>
       </button>
     </nav>
 

@@ -13,7 +13,7 @@ const emit = defineEmits<{
   (e: 'update:city', val: string): void
 }>()
 
-const categories = ['ALL', 'Infrastructure', 'Storefront', 'Logistics', 'Mobility', 'Accessibility']
+const categories = ['ALL', 'Pet Rescue', 'Lost Item', 'Safety Escort', 'Errand', 'Community Help']
 const cities = ['ALL', 'Berlin', 'Paris', 'London', 'Tokyo']
 </script>
 

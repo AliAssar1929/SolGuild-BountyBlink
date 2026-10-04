@@ -3,19 +3,20 @@ import os
 import uuid
 import secrets
 from typing import List, Optional
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Query
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 import httpx
+import json
 
 from config import settings
 from models import init_db, SessionLocal, Task, Claim, Submission, VerificationCache, AuthNonce, User
 from solana_service import solana_service
 from verifier_service import verifier_service
 
-app = FastAPI(title="BountyBlink API", version="1.2.0")
+app = FastAPI(title="SolGuild API", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,6 +28,32 @@ app.add_middleware(
 
 init_db()
 
+# Real-time WebSocket Connection Manager for Guild Events
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: dict):
+        dead_connections = []
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(json.dumps(message))
+            except Exception:
+                dead_connections.append(connection)
+        for dead in dead_connections:
+            if dead in self.active_connections:
+                self.active_connections.remove(dead)
+
+manager = ConnectionManager()
+
 def get_db():
     db = SessionLocal()
     try:
@@ -37,7 +64,7 @@ def get_db():
 # Pydantic Schemas
 class CreateTaskRequest(BaseModel):
     title: str
-    category: str = "Infrastructure"
+    category: str = "Rescue"
     instruction: str
     target_description: str
     forbidden_description: Optional[str] = None
@@ -49,14 +76,17 @@ class CreateTaskRequest(BaseModel):
     longitude: float
     radius_meters: int = 150
     photos_required: int = 1
-    finish_window_minutes: int = 10
-    reward_sol: float = 0.01
+    finish_window_minutes: int = 15
+    reward_sol: float = 0.02
     poster_address: str
     reference_photo_url: Optional[str] = None
     fund_tx_sig: Optional[str] = None
 
 class ClaimTaskRequest(BaseModel):
     worker_address: str
+
+class ApproveTaskRequest(BaseModel):
+    poster_address: str
 
 class RefundTaskRequest(BaseModel):
     poster_address: str
@@ -78,175 +108,196 @@ class VerifyEmailCodeRequest(BaseModel):
     address: str
     code: str
 
-# Seed 8 Diverse Tasks across 4 Cities
+# Seed Authentic Anime Adventurer Guild Quests across Berlin, Paris, London, Tokyo
 def seed_demo_data(db: Session):
     existing = db.query(Task).count()
     if existing == 0:
         now = datetime.datetime.utcnow()
         expiry = now + datetime.timedelta(days=7)
         demo_tasks = [
-            # Berlin
+            # Berlin: Bohemian Pet Rescue & Night Companion
             Task(
                 id=str(uuid.uuid4()),
-                title="Is the EV charger at Alexanderplatz working?",
-                category="Infrastructure",
-                instruction="Check if the Allego fast-charger #3 screen is operational and connector is docked.",
-                target_description="Green or active display on Allego station, intact CCS2 cable",
-                forbidden_description="Out of order screen error code",
-                place_name="Alexanderplatz Allego Hub",
-                full_address="Alexanderstraße 7, 10178 Berlin, Germany",
+                title="Lost tortoiseshell cat 'Mika' near Boxhagener Platz",
+                category="Pet Rescue",
+                instruction="Search around the park benches and flea market square near Boxhagener Platz. Look for a calm tortoiseshell cat with a yellow bell collar.",
+                target_description="Tortoiseshell calico cat with distinct yellow collar tag near greenery or bench",
+                forbidden_description="Different dog or stray cat without yellow bell collar",
+                place_name="Boxhagener Platz Flea Market",
+                full_address="Boxhagener Pl. 1, 10245 Berlin, Germany",
                 city="Berlin",
                 country="Germany",
-                latitude=52.5219,
-                longitude=13.4132,
+                latitude=52.5113,
+                longitude=13.4593,
                 radius_meters=150,
-                reward_sol=0.02,
-                poster_address="Agent_Sentinel_9X_DevnetKey",
+                reward_sol=0.035,
+                poster_address="Guild_Elder_Berlin_DevnetKey",
                 status="OPEN",
-                fund_tx_sig="5KjX...DemoLockSig",
+                fund_tx_sig="5KjX...GuildSealSig",
                 created_at=now,
                 expires_at=expiry
             ),
             Task(
                 id=str(uuid.uuid4()),
-                title="Bakery opening hours board",
-                category="Storefront",
-                instruction="Take a crisp photo of 'Bäckerei Siebert' chalkboard showing Sunday hours.",
-                target_description="Chalkboard sign near entrance with legible opening hours",
-                place_name="Bäckerei Siebert",
-                full_address="Schönfließer Str. 12, 10439 Berlin, Germany",
+                title="Safe companion walk escort to Warschauer Str. U-Bahn",
+                category="Safety Escort",
+                instruction="Meet outside RAW-Gelände gate and escort our party member safely past the railway bridge to Warschauer Str. U-Bahn station.",
+                target_description="Warschauer Str. station entrance glass pavilion and yellow U-Bahn sign",
+                forbidden_description="Blurred motion, dark unrecognizable alley",
+                place_name="RAW-Gelände to Warschauer U-Bahn",
+                full_address="Revaler Str. 99, 10245 Berlin, Germany",
                 city="Berlin",
                 country="Germany",
-                latitude=52.5401,
-                longitude=13.4184,
-                radius_meters=100,
-                reward_sol=0.01,
-                poster_address="Agent_Crawler_4B_DevnetKey",
-                status="OPEN",
-                fund_tx_sig="4WqP...DemoLockSig",
-                created_at=now,
-                expires_at=expiry
-            ),
-            Task(
-                id=str(uuid.uuid4()),
-                title="DHL parcel locker #108 capacity light",
-                category="Logistics",
-                instruction="Photograph parcel locker status indicator (red/green capacity light).",
-                target_description="Yellow DHL Packstation with clear view of interface screen",
-                place_name="DHL Packstation 108",
-                full_address="Friedrichstraße 140, 10117 Berlin, Germany",
-                city="Berlin",
-                country="Germany",
-                latitude=52.5163,
-                longitude=13.3777,
-                radius_meters=150,
-                reward_sol=0.015,
-                poster_address="Agent_Logistics_AI_DevnetKey",
-                status="OPEN",
-                fund_tx_sig="3RtL...DemoLockSig",
-                created_at=now,
-                expires_at=expiry
-            ),
-            # Paris
-            Task(
-                id=str(uuid.uuid4()),
-                title="Vélib bike station #1002 occupancy",
-                category="Mobility",
-                instruction="Take a photo of the Vélib docking terminal showing available mechanical and e-bikes.",
-                target_description="Vélib dock terminal screen with bike counts visible",
-                place_name="Station Vélib République",
-                full_address="Place de la République, 75011 Paris, France",
-                city="Paris",
-                country="France",
-                latitude=48.8675,
-                longitude=2.3638,
+                latitude=52.5085,
+                longitude=13.4522,
                 radius_meters=150,
                 reward_sol=0.025,
-                poster_address="Agent_Mobility_FR_DevnetKey",
+                poster_address="Adventurer_PartyLead_DevnetKey",
                 status="OPEN",
-                fund_tx_sig="7LkP...DemoLockSig",
+                fund_tx_sig="4WqP...GuildSealSig",
                 created_at=now,
                 expires_at=expiry
             ),
             Task(
                 id=str(uuid.uuid4()),
-                title="Metro entrance elevator status",
-                category="Accessibility",
-                instruction="Check if the elevator at Bastille metro line 1 is in service.",
-                target_description="Elevator glass door and operating LED indicator",
-                place_name="Metro Bastille Access",
-                full_address="Place de la Bastille, 75012 Paris, France",
+                title="Check vintage vinyl crate arrival at Friedrichshain record vault",
+                category="Errand",
+                instruction="Drop by Space Hall records on Zossener Str. Verify if the rare imported anime soundtrack crate has arrived on display.",
+                target_description="Storefront window display with newly arrived vinyl shelf visible",
+                place_name="Space Hall Record Vault",
+                full_address="Zossener Str. 33, 10961 Berlin, Germany",
+                city="Berlin",
+                country="Germany",
+                latitude=52.4921,
+                longitude=13.3934,
+                radius_meters=100,
+                reward_sol=0.015,
+                poster_address="Collector_Guildsman_DevnetKey",
+                status="OPEN",
+                fund_tx_sig="3RtL...GuildSealSig",
+                created_at=now,
+                expires_at=expiry
+            ),
+            # Paris: Lost Heirloom Recovery & Belleville Artisan Errand
+            Task(
+                id=str(uuid.uuid4()),
+                title="Lost antique brass locket in Le Marais courtyard",
+                category="Lost Item",
+                instruction="Search around the cobblestone fountain courtyard near Place des Vosges. A small heart-shaped engraved brass locket slipped off during afternoon walk.",
+                target_description="Heart-shaped engraved brass locket resting on stone or ivy bench",
+                place_name="Place des Vosges North Arcade",
+                full_address="Place des Vosges, 75004 Paris, France",
                 city="Paris",
                 country="France",
-                latitude=48.8531,
-                longitude=2.3698,
+                latitude=48.8554,
+                longitude=2.3656,
+                radius_meters=100,
+                reward_sol=0.04,
+                poster_address="Madame_Fleur_DevnetKey",
+                status="OPEN",
+                fund_tx_sig="7LkP...GuildSealSig",
+                created_at=now,
+                expires_at=expiry
+            ),
+            Task(
+                id=str(uuid.uuid4()),
+                title="Sunday artisan baguette & pastry queue status at Belleville",
+                category="Errand",
+                instruction="Check if the line at Boulangerie artisanale on Rue de Belleville is under 10 minutes so our guild brunch party can send someone over.",
+                target_description="Bakery entrance showing queue length and chalkboard daily specials",
+                place_name="Boulangerie Artisanale Belleville",
+                full_address="38 Rue de Belleville, 75020 Paris, France",
+                city="Paris",
+                country="France",
+                latitude=48.8722,
+                longitude=2.3811,
                 radius_meters=100,
                 reward_sol=0.02,
-                poster_address="Agent_AccessMap_DevnetKey",
+                poster_address="Guild_Gourmet_FR_DevnetKey",
                 status="OPEN",
-                fund_tx_sig="2MkQ...DemoLockSig",
+                fund_tx_sig="2MkQ...GuildSealSig",
                 created_at=now,
                 expires_at=expiry
             ),
-            # London
+            # London: Misplaced Sketchbook & Soho Night Companion Escort
             Task(
                 id=str(uuid.uuid4()),
-                title="Santander cycles docking bay status",
-                category="Mobility",
-                instruction="Photograph Santander docking point near King's Cross St. Pancras.",
-                target_description="Red bike rack and touch screen terminal",
-                place_name="King's Cross Bike Bay",
-                full_address="Pancras Rd, London N1C 4QP, United Kingdom",
+                title="Lost brown leather sketchbook at Camden Lock bridge",
+                category="Lost Item",
+                instruction="Check the wooden canal overlook benches near Camden Lock food stalls. Left a thick brown leather-bound fantasy art sketchbook.",
+                target_description="Brown leather sketchbook with brass clasp on wooden bench or ledge",
+                place_name="Camden Lock Canal Bridge",
+                full_address="Camden Lock Pl, London NW1 8AF, United Kingdom",
                 city="London",
                 country="United Kingdom",
-                latitude=51.5308,
-                longitude=-0.1238,
-                radius_meters=150,
-                reward_sol=0.015,
-                poster_address="Agent_LondonBikes_DevnetKey",
-                status="OPEN",
-                fund_tx_sig="8KjN...DemoLockSig",
-                created_at=now,
-                expires_at=expiry
-            ),
-            Task(
-                id=str(uuid.uuid4()),
-                title="Postal collection box schedule sign",
-                category="Logistics",
-                instruction="Photograph Royal Mail pillar box collection times plate.",
-                target_description="Red postbox metal collection time plaque",
-                place_name="Soho Postbox",
-                full_address="Wardour St, London W1F 0TA, United Kingdom",
-                city="London",
-                country="United Kingdom",
-                latitude=51.5136,
-                longitude=-0.1332,
+                latitude=51.5414,
+                longitude=-0.1466,
                 radius_meters=100,
-                reward_sol=0.01,
-                poster_address="Agent_MailTracker_DevnetKey",
+                reward_sol=0.03,
+                poster_address="Manga_Artist_UK_DevnetKey",
                 status="OPEN",
-                fund_tx_sig="9PlM...DemoLockSig",
+                fund_tx_sig="8KjN...GuildSealSig",
                 created_at=now,
                 expires_at=expiry
             ),
-            # Tokyo
             Task(
                 id=str(uuid.uuid4()),
-                title="Coin locker availability screen at Shibuya",
-                category="Logistics",
-                instruction="Photograph the digital locker occupancy map near Hachiko gate.",
-                target_description="Digital screen displaying vacant/occupied locker numbers",
-                place_name="Shibuya Station Lockers",
-                full_address="1 Chome-2 Shibuya, Shibuya City, Tokyo 150-8010, Japan",
+                title="Late-night pub walk escort to King's Cross St. Pancras",
+                category="Safety Escort",
+                instruction="Help escort a tipsy companion safely from the King's Cross pub exit to the main Underground ticket barrier hall.",
+                target_description="King's Cross station western concourse diagrid lattice roof and barrier gates",
+                place_name="King's Cross Station Concourse",
+                full_address="Euston Rd, London N1C 4QP, United Kingdom",
+                city="London",
+                country="United Kingdom",
+                latitude=51.5318,
+                longitude=-0.1243,
+                radius_meters=150,
+                reward_sol=0.025,
+                poster_address="London_Traveller_DevnetKey",
+                status="OPEN",
+                fund_tx_sig="9PlM...GuildSealSig",
+                created_at=now,
+                expires_at=expiry
+            ),
+            # Tokyo: Temple Cat Sighting & Hot Dashi Can Delivery
+            Task(
+                id=str(uuid.uuid4()),
+                title="Locate runaway black cat 'Kuro' near Yanaka Ginza temple",
+                category="Pet Rescue",
+                instruction="Walk down the Yuyake Dandan stairs in historic Yanaka. Look for a sleek black cat with red silk ribbon collar relaxing near Tennoji temple.",
+                target_description="Black cat with red silk ribbon collar or bell charm near temple stone lanterns",
+                place_name="Yanaka Ginza Yuyake Dandan",
+                full_address="3 Chome-13-1 Yanaka, Taito City, Tokyo 110-0001, Japan",
                 city="Tokyo",
                 country="Japan",
-                latitude=35.6595,
-                longitude=139.7005,
+                latitude=35.7275,
+                longitude=139.7672,
                 radius_meters=150,
-                reward_sol=0.03,
-                poster_address="Agent_TokyoLockers_DevnetKey",
+                reward_sol=0.045,
+                poster_address="Guild_Master_Tokyo_DevnetKey",
                 status="OPEN",
-                fund_tx_sig="1QzP...DemoLockSig",
+                fund_tx_sig="1QzP...GuildSealSig",
+                created_at=now,
+                expires_at=expiry
+            ),
+            Task(
+                id=str(uuid.uuid4()),
+                title="Emergency hot canned dashi delivery at Akihabara station",
+                category="Errand",
+                instruction="Our traveling party member is stranded with a bad cold at Akihabara Electric Town gate. Purchase a hot flying fish dashi can from the platform vending machine and photograph handoff.",
+                target_description="Hot Dashi soup can bottle in hand with Akihabara station pillar sign visible",
+                place_name="Akihabara Station Electric Town Exit",
+                full_address="1 Chome Soto-Kanda, Chiyoda City, Tokyo 101-0021, Japan",
+                city="Tokyo",
+                country="Japan",
+                latitude=35.6983,
+                longitude=139.7731,
+                radius_meters=100,
+                reward_sol=0.03,
+                poster_address="Otaku_Guildmate_Tokyo_DevnetKey",
+                status="OPEN",
+                fund_tx_sig="6TxR...GuildSealSig",
                 created_at=now,
                 expires_at=expiry
             )
@@ -258,6 +309,19 @@ def seed_demo_data(db: Session):
 db_sess = SessionLocal()
 seed_demo_data(db_sess)
 db_sess.close()
+
+# WebSocket Endpoint for Live Real-Time Guild Updates
+@app.websocket("/ws/quests")
+async def websocket_quests_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Keep-alive heartbeat listener
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception:
+        manager.disconnect(websocket)
 
 # API Endpoints
 @app.get("/api/health")
@@ -311,7 +375,7 @@ def get_task(task_id: str, db: Session = Depends(get_db)):
     return task
 
 @app.post("/api/tasks")
-def create_task(req: CreateTaskRequest, db: Session = Depends(get_db)):
+async def create_task(req: CreateTaskRequest, db: Session = Depends(get_db)):
     now = datetime.datetime.utcnow()
     expiry = now + datetime.timedelta(days=7)
     task_id = str(uuid.uuid4())
@@ -345,6 +409,17 @@ def create_task(req: CreateTaskRequest, db: Session = Depends(get_db)):
     db.add(task)
     db.commit()
     db.refresh(task)
+
+    # Broadcast QUEST_CREATED in real time via WebSocket
+    await manager.broadcast({
+        "event": "QUEST_CREATED",
+        "task_id": task.id,
+        "title": task.title,
+        "reward_sol": task.reward_sol,
+        "city": task.city,
+        "category": task.category
+    })
+
     return {
         "task": task,
         "fund_tx_sig": fund_sig,
@@ -352,7 +427,7 @@ def create_task(req: CreateTaskRequest, db: Session = Depends(get_db)):
     }
 
 @app.post("/api/tasks/{task_id}/claim")
-def claim_task(task_id: str, req: ClaimTaskRequest, db: Session = Depends(get_db)):
+async def claim_task(task_id: str, req: ClaimTaskRequest, db: Session = Depends(get_db)):
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -382,6 +457,15 @@ def claim_task(task_id: str, req: ClaimTaskRequest, db: Session = Depends(get_db
     task.active_claim_id = claim.id
     db.add(claim)
     db.commit()
+
+    # Broadcast QUEST_CLAIMED in real time
+    await manager.broadcast({
+        "event": "QUEST_CLAIMED",
+        "task_id": task.id,
+        "worker_address": req.worker_address,
+        "status": "CLAIMED"
+    })
+
     return {"claim": claim, "task": task}
 
 @app.post("/api/tasks/{task_id}/submit")
@@ -454,6 +538,15 @@ async def submit_evidence(
     db.add(submission)
     db.commit()
 
+    # Broadcast SUBMISSION_VERIFIED
+    await manager.broadcast({
+        "event": "SUBMISSION_VERIFIED",
+        "task_id": task.id,
+        "status": task.status,
+        "payout_tx_sig": payout_sig,
+        "passed": passed
+    })
+
     return {
         "status": task.status,
         "verification": verification,
@@ -461,8 +554,46 @@ async def submit_evidence(
         "explorer_url": explorer_url
     }
 
+@app.post("/api/tasks/{task_id}/approve")
+async def approve_task_release(task_id: str, req: ApproveTaskRequest, db: Session = Depends(get_db)):
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.poster_address != req.poster_address:
+        raise HTTPException(status_code=403, detail="Only the quest issuer can approve bounty release")
+
+    submission = db.query(Submission).filter(Submission.task_id == task_id).order_by(Submission.created_at.desc()).first()
+    worker_target = submission.worker_address if submission else None
+
+    if not worker_target:
+        claim = db.query(Claim).filter(Claim.task_id == task_id).first()
+        if claim:
+            worker_target = claim.worker_address
+
+    if not worker_target:
+        raise HTTPException(status_code=400, detail="No adventurer claim or submission found to approve")
+
+    success, sig, url = solana_service.transfer_sol(worker_target, task.reward_sol)
+    task.status = "PAID"
+    task.payout_tx_sig = sig
+    db.commit()
+
+    await manager.broadcast({
+        "event": "QUEST_APPROVED",
+        "task_id": task.id,
+        "payout_tx_sig": sig,
+        "status": "PAID"
+    })
+
+    return {
+        "status": "PAID",
+        "payout_tx_sig": sig,
+        "explorer_url": url,
+        "message": "Bounty payout successfully approved and transferred to adventurer on Solana Devnet."
+    }
+
 @app.post("/api/tasks/{task_id}/refund")
-def refund_task(task_id: str, req: RefundTaskRequest, db: Session = Depends(get_db)):
+async def refund_task(task_id: str, req: RefundTaskRequest, db: Session = Depends(get_db)):
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -473,6 +604,12 @@ def refund_task(task_id: str, req: RefundTaskRequest, db: Session = Depends(get_
     task.status = "REFUNDED"
     task.refund_tx_sig = sig
     db.commit()
+
+    await manager.broadcast({
+        "event": "QUEST_REFUNDED",
+        "task_id": task.id,
+        "status": "REFUNDED"
+    })
 
     return {
         "status": "REFUNDED",
@@ -685,14 +822,41 @@ def get_user_activity(address: str, db: Session = Depends(get_db)):
     
     submissions = db.query(Submission).filter(Submission.worker_address == address).order_by(Submission.created_at.desc()).all()
 
+    # Find tasks posted by this address that have verified photo submissions pending issuer approval
+    posted_task_ids = [t.id for t in posted_tasks]
+    pending_submissions = db.query(Submission).filter(
+        Submission.task_id.in_(posted_task_ids),
+        Submission.tier0_pass == True,
+        Submission.tier1_pass == True,
+        Submission.tier2_pass == True
+    ).all() if posted_task_ids else []
+
+    pending_approvals = []
+    for ps in pending_submissions:
+        parent_t = next((t for t in posted_tasks if t.id == ps.task_id), None)
+        if parent_t and parent_t.status in ["CLAIMED", "OPEN"]:
+            pending_approvals.append({
+                "submission_id": ps.id,
+                "task_id": parent_t.id,
+                "title": parent_t.title,
+                "reward_sol": parent_t.reward_sol,
+                "city": parent_t.city,
+                "worker_address": ps.worker_address,
+                "submitted_at": ps.created_at.isoformat() if ps.created_at else None,
+                "vision_confidence": ps.vision_confidence,
+                "vision_reason": ps.vision_reason
+            })
+
     return {
         "posted_tasks": posted_tasks,
         "claimed_tasks": claimed_tasks,
         "submissions": submissions,
+        "pending_approvals": pending_approvals,
         "stats": {
             "total_posted": len(posted_tasks),
             "total_claimed": len(user_claims),
-            "total_submissions": len(submissions)
+            "total_submissions": len(submissions),
+            "total_pending_approvals": len(pending_approvals)
         }
     }
 

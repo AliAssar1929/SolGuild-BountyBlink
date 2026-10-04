@@ -10,14 +10,14 @@ defineEmits<{
     <!-- Header -->
     <header class="h-16 max-w-5xl mx-auto w-full px-6 flex items-center justify-between">
       <div class="flex items-center gap-2">
-        <span class="font-bold text-[19px]">BountyBlink</span>
+        <span class="font-bold text-[19px]">SolGuild</span>
         <span class="text-[13px] text-[#5E5B53]">Devnet</span>
       </div>
       <button 
         @click="$emit('startApp')"
         class="h-9 px-4 rounded-[12px] bg-[#FFD60A] text-[#1A1A17] font-semibold text-[15px] hover:brightness-95 transition-all"
       >
-        Try the demo
+        Enter Guild Board
       </button>
     </header>
 
@@ -29,10 +29,10 @@ defineEmits<{
         <!-- Left Column: Copy & Actions -->
         <div class="md:col-span-7 space-y-6 text-left">
           <h1 class="text-3xl sm:text-4xl md:text-[44px] font-bold text-[#1A1A17] leading-[1.15] tracking-tight">
-            Pay for a photo, only if it checks out.
+            The on-chain adventurer guild for real life.
           </h1>
           <p class="text-[17px] text-[#5E5B53] leading-relaxed max-w-lg">
-            Post a small task, hold the reward, and release it when a nearby person's photo passes an automatic check. Runs on Solana Devnet.
+            Issue quests, rescue lost pets, recover forgotten items, and escort party members. SOL bounties locked in Solana Devnet escrow, released when photo evidence passes AI verification.
           </p>
 
           <div class="flex items-center gap-3 pt-2">
@@ -40,7 +40,7 @@ defineEmits<{
               @click="$emit('startApp')"
               class="h-12 px-6 rounded-[12px] bg-[#FFD60A] text-[#1A1A17] font-semibold text-[15px] hover:brightness-95 transition-all shadow-xs"
             >
-              Try the demo
+              Enter Guild Board
             </button>
             <a 
               href="https://github.com/VoltAgent/bountyblink"

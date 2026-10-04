@@ -57,18 +57,23 @@ const emit = defineEmits<{
         <button 
           @click="$emit('connectPhantom')"
           :disabled="isConnecting"
-          class="w-full p-4 rounded-[12px] border-2 border-[#1A1A17] bg-[#FFD60A] hover:bg-[#F2CA00] text-[#1A1A17] font-semibold text-[15px] flex items-center justify-between transition-transform active:scale-[0.99] cursor-pointer"
+          class="w-full p-4 rounded-[12px] border border-[#E3DFD6] bg-[#F7F5F0] hover:bg-[#EAE6DC] text-[#1A1A17] font-semibold text-[15px] flex items-center justify-between transition-transform active:scale-[0.99] cursor-pointer shadow-xs"
         >
-          <div class="flex items-center gap-2.5">
-            <div class="w-7 h-7 rounded-full bg-[#1A1A17] flex items-center justify-center text-white text-[11px] font-bold">
-              👻
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-[8px] bg-[#534BAE] flex items-center justify-center p-1.5 shadow-xs">
+              <!-- Official Phantom Purple Ghost SVG -->
+              <svg viewBox="0 0 128 128" class="w-full h-full text-white" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M112.5 64C112.5 90.7858 90.7858 112.5 64 112.5C48.0673 112.5 34.0203 104.793 25.2678 92.8944C23.7719 90.8609 25.1011 87.9733 27.6068 87.8767C37.0759 87.5118 45.4523 81.3323 48.7423 72.4839C49.9678 69.1882 48.3377 65.4853 45.1843 64.0954C34.5097 59.3907 27.0833 48.7619 27.0833 36.4167C27.0833 20.3168 40.1501 7.25 56.25 7.25C87.316 7.25 112.5 32.684 112.5 64Z" fill="white"/>
+                <circle cx="53" cy="52" r="6" fill="#534BAE"/>
+                <circle cx="79" cy="52" r="6" fill="#534BAE"/>
+              </svg>
             </div>
             <div class="text-left">
-              <div>{{ isConnecting ? 'Connecting...' : 'Connect Phantom' }}</div>
-              <div class="text-[11px] text-[#1A1A17]/80 font-normal">Connect or Join with your Solana address</div>
+              <div class="font-bold text-[#1A1A17]">{{ isConnecting ? 'Connecting Phantom...' : 'Connect Phantom Wallet' }}</div>
+              <div class="text-[12px] text-[#5E5B53] font-normal">Connect or Join with your Solana address</div>
             </div>
           </div>
-          <ArrowRight class="w-5 h-5" />
+          <ArrowRight class="w-5 h-5 text-[#5E5B53]" />
         </button>
 
         <p class="text-center text-[12px] text-[#5E5B53]">

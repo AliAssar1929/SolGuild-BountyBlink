@@ -53,11 +53,21 @@ export function useWallet() {
   }
 
   const connectPhantom = async () => {
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
     const provider = getProvider()
+
     if (!provider) {
-      // Direct user to install Phantom
-      window.open('https://phantom.app/', '_blank')
-      return false
+      if (isMobile) {
+        // Deep link into Phantom mobile browser with current URL encoded
+        const currentUrl = encodeURIComponent(window.location.href)
+        const phantomDeepLink = `https://phantom.app/ul/browse/${currentUrl}?ref=${currentUrl}`
+        window.location.href = phantomDeepLink
+        return false
+      } else {
+        // Direct desktop user to install Phantom extension
+        window.open('https://phantom.app/', '_blank')
+        return false
+      }
     }
 
     isConnecting.value = true
