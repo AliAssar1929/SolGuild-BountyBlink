@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: #F8F6F0;
+    color: #161614;
+    font-family: -apple-system, BlinkMacSystemFont, "Inter Tight", "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+.font-mono {
+  font-family: "Geist Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.ticket-border {
+  background-image: radial-gradient(circle at 0.5rem 0, transparent 0.5rem, #F8F6F0 0.5rem);
+}
