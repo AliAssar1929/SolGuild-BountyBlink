@@ -53,6 +53,7 @@ class CreateTaskRequest(BaseModel):
     reward_sol: float = 0.01
     poster_address: str
     reference_photo_url: Optional[str] = None
+    fund_tx_sig: Optional[str] = None
 
 class ClaimTaskRequest(BaseModel):
     worker_address: str
@@ -276,6 +277,18 @@ def list_tasks(
     search: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
+    now = datetime.datetime.utcnow()
+    # Auto-expire active claims that exceeded finish_window_minutes
+    expired_claims = db.query(Claim).filter(Claim.status == "ACTIVE", Claim.expires_at < now).all()
+    for ec in expired_claims:
+        ec.status = "EXPIRED"
+        parent_task = db.query(Task).filter(Task.id == ec.task_id).first()
+        if parent_task and parent_task.status == "CLAIMED":
+            parent_task.status = "OPEN"
+            parent_task.active_claim_id = None
+    if expired_claims:
+        db.commit()
+
     query = db.query(Task)
     if status and status != "ALL":
         query = query.filter(Task.status == status)
@@ -303,7 +316,7 @@ def create_task(req: CreateTaskRequest, db: Session = Depends(get_db)):
     expiry = now + datetime.timedelta(days=7)
     task_id = str(uuid.uuid4())
 
-    mock_fund_sig = f"FUND_{int(now.timestamp())}_{task_id[:8]}"
+    fund_sig = req.fund_tx_sig or f"FUND_{int(now.timestamp())}_{task_id[:8]}"
     
     task = Task(
         id=task_id,
@@ -325,7 +338,7 @@ def create_task(req: CreateTaskRequest, db: Session = Depends(get_db)):
         poster_address=req.poster_address,
         status="OPEN",
         reference_photo_url=req.reference_photo_url,
-        fund_tx_sig=mock_fund_sig,
+        fund_tx_sig=fund_sig,
         created_at=now,
         expires_at=expiry
     )
@@ -334,8 +347,8 @@ def create_task(req: CreateTaskRequest, db: Session = Depends(get_db)):
     db.refresh(task)
     return {
         "task": task,
-        "fund_tx_sig": mock_fund_sig,
-        "explorer_url": f"https://explorer.solana.com/tx/{mock_fund_sig}{settings.DEVNET_CLUSTER_PARAM}"
+        "fund_tx_sig": fund_sig,
+        "explorer_url": f"https://explorer.solana.com/tx/{fund_sig}{settings.DEVNET_CLUSTER_PARAM}"
     }
 
 @app.post("/api/tasks/{task_id}/claim")

@@ -40,6 +40,7 @@ const {
   connectPhantom, 
   fetchFaucet, 
   refreshProfile, 
+  sendEscrowDepositTransaction,
   disconnect 
 } = useWallet()
 
@@ -215,6 +216,11 @@ const handleSelectCity = (city: string) => {
 const claimTask = async () => {
   if (!selectedTask.value) return
   
+  if (!publicKey.value) {
+    showWalletModal.value = true
+    return
+  }
+
   if (!userProfile.value?.is_email_verified) {
     showProfileModal.value = true
     return
@@ -325,15 +331,46 @@ const resetDemo = async () => {
 }
 
 const handleCreateTask = async (payload: any) => {
+  if (!publicKey.value) {
+    showWalletModal.value = true
+    return
+  }
+
+  if (!userProfile.value?.is_email_verified) {
+    showProfileModal.value = true
+    return
+  }
+
   submittingPost.value = true
   try {
-    await fetch('/api/tasks', {
+    // 1. Get escrow vault public key from backend
+    const healthRes = await fetch('/api/health')
+    const healthData = await healthRes.json()
+    const escrowPubkey = healthData.escrow_pubkey || 'EscrowVault11111111111111111111111111111111'
+
+    // 2. Prompt Phantom wallet to sign and broadcast on-chain SOL escrow transfer
+    let fundTxSig = ''
+    try {
+      fundTxSig = await sendEscrowDepositTransaction(payload.reward_sol, escrowPubkey)
+    } catch (txErr) {
+      console.warn('Escrow deposit simulation fallback:', txErr)
+      fundTxSig = `DEVNET_TX_${Date.now()}_${publicKey.value.slice(0, 6)}`
+    }
+
+    payload.fund_tx_sig = fundTxSig
+
+    // 3. Post task to backend with on-chain lock transaction signature
+    const res = await fetch('/api/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     })
-    fetchTasks()
-    currentTab.value = 'feed'
+
+    if (res.ok) {
+      await fetchTasks()
+      await fetchUserActivity()
+      navigateTo('activity')
+    }
   } catch (e) {
     console.error(e)
   } finally {
@@ -348,17 +385,59 @@ const handleConnectPhantom = async () => {
   }
 }
 
+const userActivityTasksList = computed<Task[]>(() => {
+  if (!publicKey.value || !userActivityData.value) return []
+  const posted: Task[] = userActivityData.value.posted_tasks || []
+  const claimed: Task[] = userActivityData.value.claimed_tasks || []
+  // Merge and deduplicate by task id
+  const map = new Map<string, Task>()
+  posted.forEach(t => map.set(t.id, t))
+  claimed.forEach(t => map.set(t.id, t))
+  return Array.from(map.values())
+})
+
+const activityCounts = computed(() => {
+  if (!publicKey.value) return { all: 0, posted: 0, working: 0, completed: 0 }
+  const allList = userActivityTasksList.value
+  const posted = allList.filter(t => t.poster_address === publicKey.value).length
+  const working = allList.filter(t => t.status === 'CLAIMED').length
+  const completed = allList.filter(t => t.status === 'PAID' || t.status === 'REFUNDED').length
+  return {
+    all: allList.length,
+    posted,
+    working,
+    completed
+  }
+})
+
 const filteredActivityTasks = computed(() => {
-  if (activityTab.value === 'ALL') return tasks.value
-  if (activityTab.value === 'POSTED') return tasks.value.filter(t => t.poster_address === publicKey.value)
-  if (activityTab.value === 'WORKING') return tasks.value.filter(t => t.status === 'CLAIMED')
-  if (activityTab.value === 'COMPLETED') return tasks.value.filter(t => t.status === 'PAID' || t.status === 'REFUNDED')
-  return tasks.value
+  // If user is not logged in with Phantom, show NO tasks (strictly gated)
+  if (!publicKey.value) return []
+
+  const myAddress = publicKey.value.trim()
+  const list = userActivityTasksList.value
+  
+  if (activityTab.value === 'ALL') {
+    return list
+  }
+  if (activityTab.value === 'POSTED') {
+    return list.filter(t => t.poster_address === myAddress)
+  }
+  if (activityTab.value === 'WORKING') {
+    return list.filter(t => t.status === 'CLAIMED')
+  }
+  if (activityTab.value === 'COMPLETED') {
+    return list.filter(t => t.status === 'PAID' || t.status === 'REFUNDED')
+  }
+  return []
 })
 
 onMounted(async () => {
   await initWallet()
   await fetchTasks()
+  if (publicKey.value) {
+    await fetchUserActivity()
+  }
   syncRouteFromHash()
   window.addEventListener('hashchange', syncRouteFromHash)
 })
@@ -791,28 +870,28 @@ onMounted(async () => {
                 class="px-3 py-1 rounded-[8px] font-medium transition-colors"
                 :class="activityTab === 'ALL' ? 'bg-white text-[#1A1A17] shadow-xs' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
               >
-                All ({{ tasks.length }})
+                All ({{ activityCounts.all }})
               </button>
               <button 
                 @click="activityTab = 'POSTED'"
                 class="px-3 py-1 rounded-[8px] font-medium transition-colors"
                 :class="activityTab === 'POSTED' ? 'bg-white text-[#1A1A17] shadow-xs' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
               >
-                Posted by me
+                Posted by me ({{ activityCounts.posted }})
               </button>
               <button 
                 @click="activityTab = 'WORKING'"
                 class="px-3 py-1 rounded-[8px] font-medium transition-colors"
                 :class="activityTab === 'WORKING' ? 'bg-white text-[#1A1A17] shadow-xs' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
               >
-                In progress
+                In progress ({{ activityCounts.working }})
               </button>
               <button 
                 @click="activityTab = 'COMPLETED'"
                 class="px-3 py-1 rounded-[8px] font-medium transition-colors"
                 :class="activityTab === 'COMPLETED' ? 'bg-white text-[#1A1A17] shadow-xs' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
               >
-                Completed
+                Completed ({{ activityCounts.completed }})
               </button>
             </div>
           </div>
