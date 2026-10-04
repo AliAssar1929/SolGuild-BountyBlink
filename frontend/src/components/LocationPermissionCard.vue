@@ -12,7 +12,7 @@ defineEmits<{
   (e: 'dismiss'): void
 }>()
 
-const cities = ['Berlin', 'Paris', 'London', 'Tokyo']
+const cities = ['London', 'Paris', 'Berlin', 'Madrid', 'Rome', 'Amsterdam', 'Barcelona', 'Vienna']
 </script>
 
 <template>

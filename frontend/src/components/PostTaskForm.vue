@@ -2,7 +2,7 @@
 import { ref, watch } from 'vue'
 import AddressSearch from './AddressSearch.vue'
 import ReferencePhotoPicker from './ReferencePhotoPicker.vue'
-import { Scroll, Sparkles, ShieldCheck, ArrowRight, ArrowLeft } from 'lucide-vue-next'
+import { Scroll, Sparkles, ShieldCheck, ShieldAlert, ArrowRight, ArrowLeft } from 'lucide-vue-next'
 
 const props = defineProps<{
   userAddress: string
@@ -38,7 +38,7 @@ const finishWindowMinutes = ref(15)
 const rewardSol = ref(0.035)
 const referencePhotos = ref<string[]>([])
 
-const categories = ['Civil Help', 'Sensitive Task', 'Commercial']
+const categories = ['Civil Help', 'Sensitive', 'Commercial']
 const radii = [50, 100, 150, 250]
 const windows = [10, 15, 30]
 
@@ -151,27 +151,34 @@ const handleSubmit = () => {
             <Sparkles class="w-3.5 h-3.5 text-[#1A1A17]" />
             <span>Adventurer Guild Templates</span>
           </label>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <button 
               type="button"
               @click="applyPreset('Find my calico cat Mika near Boxhagener Platz', 'Search around park benches near Boxhagener Platz. Look for a calm calico cat with yellow bell collar.', 'Calico cat with yellow bell collar tag near bench', 'Civil Help', 'Berlin', 52.5113, 13.4593, 'Boxhagener Platz Square', 0.035)"
               class="p-2.5 text-left rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] hover:border-[#1A1A17] text-[12px] leading-snug cursor-pointer transition-colors"
             >
-              🐾 Find My Cat (Civil Help)
+              🐾 Find Cat (Civil Help)
             </button>
             <button 
               type="button"
-              @click="applyPreset('Help my grandpa on wheelchair at Warschauer U-Bahn', 'Meet my grandpa and assist with wheelchair navigation to the accessible platform elevator.', 'Accessible elevator tower and yellow U-Bahn sign', 'Civil Help', 'Berlin', 52.5085, 13.4522, 'Warschauer Str. Elevator', 0.04)"
+              @click="applyPreset('Designated driver: Drive patron car home from Malasaña tapas tour', 'Meet patron at Plaza del Dos de Mayo. Drive patron car safely to their parking garage in Chamberí.', 'Parked vehicle in private residential bay with garage sign', 'Civil Help', 'Madrid', 40.4276, -3.7037, 'Plaza del Dos de Mayo', 0.045)"
               class="p-2.5 text-left rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] hover:border-[#1A1A17] text-[12px] leading-snug cursor-pointer transition-colors"
             >
-              ♿ Help Grandpa (Civil Help)
+              🚗 Driver Escort (Civil Help)
             </button>
             <button 
               type="button"
-              @click="applyPreset('Gather info of silver van near St. Pancras delivery bay', 'Discreetly verify license plate and courier badge of silver logistics van at delivery dock.', 'Silver cargo van rear view with clearly legible UK registration plate', 'Sensitive Task', 'London', 51.5318, -0.1243, 'Pancras Square Delivery Bay', 0.05)"
+              @click="applyPreset('Surveillance & license plate log of black courier van in Mayfair', 'Discreetly photograph logistics van plate and submit a formal investigation letter detailing origin and timetable.', 'Black logistics van rear registration plate with Mayfair alley paving visible', 'Sensitive', 'London', 51.5097, -0.1492, 'Mount Street Commercial Alley', 0.06)"
               class="p-2.5 text-left rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] hover:border-[#1A1A17] text-[12px] leading-snug cursor-pointer transition-colors"
             >
-              🔍 Vehicle Info (Sensitive)
+              🔍 Van Intel (Sensitive)
+            </button>
+            <button 
+              type="button"
+              @click="applyPreset('Artisan pistachio tart showcase photo & tasting reel at Belleville bakery', 'Purchase seasonal pistachio tart from bakery display, place by window terrace with shop signage, and capture commercial photo.', 'Pistachio pastry confection in packaging with Boulangerie Belleville storefront lettering', 'Commercial', 'Paris', 48.8722, 2.3811, 'Boulangerie Artisanale Belleville', 0.03)"
+              class="p-2.5 text-left rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] hover:border-[#1A1A17] text-[12px] leading-snug cursor-pointer transition-colors"
+            >
+              📸 Pastry Reel (Commercial)
             </button>
           </div>
         </div>
@@ -197,17 +204,32 @@ const handleSubmit = () => {
           </div>
 
           <div>
-            <label class="block text-[13px] font-medium text-[#5E5B53] mb-1">Target City</label>
+            <label class="block text-[13px] font-medium text-[#5E5B53] mb-1">Target European City</label>
             <select 
               v-model="city"
               class="w-full px-3 py-2.5 rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] text-[14px] text-[#1A1A17] focus:outline-none focus:border-[#1A1A17]"
             >
-              <option value="Berlin">Berlin</option>
-              <option value="Paris">Paris</option>
-              <option value="London">London</option>
-              <option value="Tokyo">Tokyo</option>
+              <option value="London">London (UK)</option>
+              <option value="Paris">Paris (France)</option>
+              <option value="Berlin">Berlin (Germany)</option>
+              <option value="Madrid">Madrid (Spain)</option>
+              <option value="Rome">Rome (Italy)</option>
+              <option value="Amsterdam">Amsterdam (Netherlands)</option>
+              <option value="Barcelona">Barcelona (Spain)</option>
+              <option value="Vienna">Vienna (Austria)</option>
             </select>
           </div>
+        </div>
+
+        <!-- Sensitive Protocol Notice Banner -->
+        <div v-if="category === 'Sensitive'" class="p-3.5 rounded-[10px] bg-[#FFF8E6] border border-[#F5C242] text-left space-y-1">
+          <div class="flex items-center gap-1.5 font-semibold text-[13px] text-[#8C5800]">
+            <ShieldAlert class="w-4 h-4 text-[#B87A00]" />
+            <span>Sensitive Intelligence Protocol Mandate</span>
+          </div>
+          <p class="text-[12px] text-[#8C5800] leading-relaxed">
+            To claim bounties in this category, adventurers must submit both an <strong>on-site physical photo</strong> AND a formal <strong>written investigation letter</strong> with declared intelligence source attribution (e.g. municipal record, direct witness interview, visual surveillance). Gemini 3.1 Flash-Lite evaluates both streams.
+          </p>
         </div>
 
         <div>

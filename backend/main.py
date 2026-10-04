@@ -108,183 +108,24 @@ class VerifyEmailCodeRequest(BaseModel):
     address: str
     code: str
 
-# Seed Authentic Anime Adventurer Guild Quests across Berlin, Paris, London, Tokyo
-# Strict 3-category taxonomy: "Civil Help", "Sensitive Task", "Commercial"
-def seed_demo_data(db: Session):
+from seed_data import get_european_seed_quests
+
+# Seed Authentic Pan-European Guild Quests across 8 major European metropolitan hubs
+# Canonical categories: "Civil Help", "Sensitive", "Commercial"
+def seed_demo_data(db: Session, force_reset: bool = False):
+    if force_reset:
+        db.query(Submission).delete()
+        db.query(Claim).delete()
+        db.query(Task).delete()
+        db.commit()
+
     existing = db.query(Task).count()
-    if existing == 0:
-        now = datetime.datetime.utcnow()
-        expiry = now + datetime.timedelta(days=7)
-        demo_tasks = [
-            # Berlin: Find Lost Cat & Grandpa Wheelchair Assistance
-            Task(
-                id=str(uuid.uuid4()),
-                title="Find my calico cat 'Mika' near Boxhagener Platz",
-                category="Civil Help",
-                instruction="Search around the park benches and chestnut trees near Boxhagener Platz. My elderly cat slipped her harness; she has a distinctive yellow bell collar and calico patches.",
-                target_description="Calico cat with white chest, ginger patches, and yellow bell collar resting near grass or bench",
-                forbidden_description="Different animal, dog, or cat without yellow collar",
-                place_name="Boxhagener Platz Square",
-                full_address="Boxhagener Pl. 1, 10245 Berlin, Germany",
-                city="Berlin",
-                country="Germany",
-                latitude=52.5113,
-                longitude=13.4593,
-                radius_meters=150,
-                reward_sol=0.035,
-                poster_address="Guild_Elder_Berlin_DevnetKey",
-                status="OPEN",
-                fund_tx_sig="5KjX...GuildSealSig",
-                created_at=now,
-                expires_at=expiry
-            ),
-            Task(
-                id=str(uuid.uuid4()),
-                title="Help my grandpa on wheelchair navigate Warschauer U-Bahn elevator",
-                category="Civil Help",
-                instruction="Meet my grandpa and assist with wheelchair navigation through the busy station ramp and elevator entrance to the yellow U1/U3 platform.",
-                target_description="Warschauer Str. station accessible entrance glass elevator tower and yellow U-Bahn sign",
-                forbidden_description="Blurred motion, dark unrecognizable stairs",
-                place_name="Warschauer Str. Barrier-Free Access",
-                full_address="Revaler Str. 99, 10245 Berlin, Germany",
-                city="Berlin",
-                country="Germany",
-                latitude=52.5085,
-                longitude=13.4522,
-                radius_meters=150,
-                reward_sol=0.04,
-                poster_address="Family_Support_Berlin_DevnetKey",
-                status="OPEN",
-                fund_tx_sig="4WqP...GuildSealSig",
-                created_at=now,
-                expires_at=expiry
-            ),
-            # Paris: Lost Purse in Courtyard & Commercial Product Photoshoot
-            Task(
-                id=str(uuid.uuid4()),
-                title="Find my leather purse lost in Place des Vosges arcade",
-                category="Civil Help",
-                instruction="Check the red-brick stone arcade walkway and courtyard fountain perimeter. Left a burgundy leather shoulder purse with gold buckle on a stone bench.",
-                target_description="Burgundy leather shoulder purse with golden clasp on bench or arcade pillar base",
-                place_name="Place des Vosges North Arcade",
-                full_address="Place des Vosges, 75004 Paris, France",
-                city="Paris",
-                country="France",
-                latitude=48.8554,
-                longitude=2.3656,
-                radius_meters=100,
-                reward_sol=0.045,
-                poster_address="Madame_Fleur_DevnetKey",
-                status="OPEN",
-                fund_tx_sig="7LkP...GuildSealSig",
-                created_at=now,
-                expires_at=expiry
-            ),
-            Task(
-                id=str(uuid.uuid4()),
-                title="Buy artisan pastry from Belleville shop & take promotional photoshoot",
-                category="Commercial",
-                instruction="Purchase the seasonal pistachio tart from the bakery display, place it by the window terrace with shop signage in background, and capture a sharp commercial photo.",
-                target_description="Pistachio pastry confection in packaging with Boulangerie Belleville storefront lettering in focus",
-                place_name="Boulangerie Artisanale Belleville",
-                full_address="38 Rue de Belleville, 75020 Paris, France",
-                city="Paris",
-                country="France",
-                latitude=48.8722,
-                longitude=2.3811,
-                radius_meters=100,
-                reward_sol=0.03,
-                poster_address="Guild_Gourmet_FR_DevnetKey",
-                status="OPEN",
-                fund_tx_sig="2MkQ...GuildSealSig",
-                created_at=now,
-                expires_at=expiry
-            ),
-            # London: Gather Info of Specific Vehicle & Sensitive Courier
-            Task(
-                id=str(uuid.uuid4()),
-                title="Gather info & license plate of silver van near St. Pancras delivery bay",
-                category="Sensitive Task",
-                instruction="Discreetly inspect the commercial loading bay near Pancras Square. Verify the exact license plate and courier badge on the parked silver logistics van.",
-                target_description="Silver cargo van rear view with clearly legible UK registration plate and loading bay dock",
-                place_name="Pancras Square Logistics Dock",
-                full_address="Euston Rd, London N1C 4QP, United Kingdom",
-                city="London",
-                country="United Kingdom",
-                latitude=51.5318,
-                longitude=-0.1243,
-                radius_meters=100,
-                reward_sol=0.05,
-                poster_address="Fleet_Security_UK_DevnetKey",
-                status="OPEN",
-                fund_tx_sig="9PlM...GuildSealSig",
-                created_at=now,
-                expires_at=expiry
-            ),
-            Task(
-                id=str(uuid.uuid4()),
-                title="Gather info on vintage convertible parked by Regent's Canal lock",
-                category="Sensitive Task",
-                instruction="A vintage British racing green sports car is parked near the bridge. Note windshield inspection sticker and take identification angle photo.",
-                target_description="British racing green vintage convertible with front chrome grille and registration badge visible",
-                place_name="Camden Lock Overlook",
-                full_address="Camden Lock Pl, London NW1 8AF, United Kingdom",
-                city="London",
-                country="United Kingdom",
-                latitude=51.5414,
-                longitude=-0.1466,
-                radius_meters=100,
-                reward_sol=0.035,
-                poster_address="Auto_Investigator_UK_DevnetKey",
-                status="OPEN",
-                fund_tx_sig="8KjN...GuildSealSig",
-                created_at=now,
-                expires_at=expiry
-            ),
-            # Tokyo: Find Lost Kuro Cat & Commercial Showcase
-            Task(
-                id=str(uuid.uuid4()),
-                title="Find my black cat 'Kuro' with red ribbon near Yanaka Ginza temple",
-                category="Civil Help",
-                instruction="Walk down the Yuyake Dandan stairs in historic Yanaka. Look for a sleek black cat with red silk ribbon collar relaxing near Tennoji temple stone lanterns.",
-                target_description="Black cat with red silk ribbon collar or bell charm near temple stone lanterns",
-                place_name="Yanaka Ginza Yuyake Dandan",
-                full_address="3 Chome-13-1 Yanaka, Taito City, Tokyo 110-0001, Japan",
-                city="Tokyo",
-                country="Japan",
-                latitude=35.7275,
-                longitude=139.7672,
-                radius_meters=150,
-                reward_sol=0.045,
-                poster_address="Guild_Master_Tokyo_DevnetKey",
-                status="OPEN",
-                fund_tx_sig="1QzP...GuildSealSig",
-                created_at=now,
-                expires_at=expiry
-            ),
-            Task(
-                id=str(uuid.uuid4()),
-                title="Buy exclusive figure from Akihabara Radio Kaikan & take product photoshoot",
-                category="Commercial",
-                instruction="Visit the 2nd floor hobby booth at Radio Kaikan, purchase the limited edition display item, and photograph the boxed product alongside storefront showcase.",
-                target_description="Collectible figure product packaging in front of Akihabara Radio Kaikan neon facade",
-                place_name="Akihabara Radio Kaikan",
-                full_address="1 Chome-15-16 Soto-Kanda, Chiyoda City, Tokyo 101-0021, Japan",
-                city="Tokyo",
-                country="Japan",
-                latitude=35.6983,
-                longitude=139.7731,
-                radius_meters=100,
-                reward_sol=0.04,
-                poster_address="Otaku_Guildmate_Tokyo_DevnetKey",
-                status="OPEN",
-                fund_tx_sig="6TxR...GuildSealSig",
-                created_at=now,
-                expires_at=expiry
-            )
-        ]
+    if existing == 0 or force_reset:
+        raw_quests = get_european_seed_quests()
+        demo_tasks = [Task(**q) for q in raw_quests]
         db.add_all(demo_tasks)
         db.commit()
+        print(f"[Seed] Successfully populated {len(demo_tasks)} European guild quests across 8 major hubs.")
 
 # Ensure seed data exists
 db_sess = SessionLocal()
@@ -449,6 +290,9 @@ async def submit_evidence(
     browser_lat: Optional[float] = Form(None),
     browser_lon: Optional[float] = Form(None),
     photo: Optional[UploadFile] = File(None),
+    investigation_letter: Optional[str] = Form(None),
+    source_info: Optional[str] = Form(None),
+    letter_file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
 ):
     task = db.query(Task).filter(Task.id == task_id).first()
@@ -466,6 +310,19 @@ async def submit_evidence(
         with open(file_path, "wb") as f:
             f.write(b"DEMO_FIXTURE_IMAGE_BYTES")
 
+    letter_file_path = None
+    if letter_file:
+        letter_filename = f"{task_id}_letter_{int(datetime.datetime.utcnow().timestamp())}_{letter_file.filename}"
+        letter_file_path = os.path.join(settings.UPLOAD_DIR, letter_filename)
+        letter_contents = await letter_file.read()
+        with open(letter_file_path, "wb") as f:
+            f.write(letter_contents)
+        if not investigation_letter and letter_file.filename.lower().endswith(('.txt', '.md')):
+            try:
+                investigation_letter = letter_contents.decode('utf-8', errors='ignore')
+            except Exception:
+                pass
+
     verification = verifier_service.verify_submission(
         task_instruction=task.instruction,
         task_target_desc=task.target_description,
@@ -474,7 +331,10 @@ async def submit_evidence(
         file_path=file_path,
         device_lat=browser_lat,
         device_lon=browser_lon,
-        fixture_type=fixture_type
+        fixture_type=fixture_type,
+        task_category=task.category,
+        investigation_letter=investigation_letter,
+        source_info=source_info
     )
 
     passed = verification["tier0_pass"] and verification["tier1_pass"] and verification["tier2_pass"]
@@ -497,6 +357,9 @@ async def submit_evidence(
         worker_address=worker_address,
         file_hash=verification["file_hash"],
         image_path=file_path,
+        investigation_letter=investigation_letter,
+        source_info=source_info,
+        letter_file_path=letter_file_path,
         submitted_lat=browser_lat,
         submitted_lon=browser_lon,
         distance_meters=verification["distance_meters"],
@@ -526,6 +389,18 @@ async def submit_evidence(
         "payout_tx_sig": payout_sig,
         "explorer_url": explorer_url
     }
+
+@app.post("/api/demo/reset")
+async def reset_demo_quests(db: Session = Depends(get_db)):
+    """Reset and re-seed the full 88-quest European catalog."""
+    seed_demo_data(db, force_reset=True)
+    count = db.query(Task).count()
+    await manager.broadcast({
+        "event": "QUEST_RESET",
+        "message": "Quests refreshed across European guild network",
+        "count": count
+    })
+    return {"status": "ok", "message": "Quests successfully reset to European catalog", "tasks_count": count}
 
 @app.post("/api/tasks/{task_id}/approve")
 async def approve_task_release(task_id: str, req: ApproveTaskRequest, db: Session = Depends(get_db)):

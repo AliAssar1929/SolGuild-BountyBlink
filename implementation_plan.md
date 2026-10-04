@@ -1,205 +1,235 @@
-# implementation_plan.md — BountyBlink 3-Hour Devnet Mobile MVP (Ultra-Deep Architecture & Flaw Audit)
-*Date: October 4, 2026 | Target: Solana Devnet Colosseum MVP | Stack: Vue 3 + FastAPI + Solana-py*
+# implementation_plan.md — BountyBlink / SolGuild: Pan-European Expansion & Multi-Evidence Architecture
+
+*Date: October 4, 2026 | Focus: European Guild Network | Stack: Vue 3 + FastAPI + SQLite + Gemini 3.1 Flash-Lite + Solana Devnet*  
+*Roles: Backend Architect & Frontend Developer*
 
 ---
 
-## 1. Deep Dive: Current State, Advantages & Exhaustive Flaw Analysis
+## 1. Executive Summary & Problem Analysis
 
-### 1.1 Architectural Advantages
-1. **Zero-Friction Judge Onboarding (Sub-60s Time to Payout)**:
-   - Eliminates Phantom/Solflare extension installation hurdles by using an ephemeral client-side Devnet keypair stored in `localStorage`, pre-funded via the backend faucet.
-   - Test fixture buttons ("Test: Valid photo" and "Test: Fake photo") guarantee reliable verification results during rapid judging without requiring field movement.
-2. **Deterministic Settlement Flow on Solana Devnet**:
-   - Uses native SOL transfers (0.01 SOL) rather than custom SPL tokens, completely bypassing associated token account (ATA) initialization overhead, rent fees, and token faucet rate-limits.
-   - Direct on-chain confirmation links to Solana Explorer (`cluster=devnet`) provide unforgeable cryptographic proof of escrow lock and release.
-3. **Targeted Mobile Viewport Experience**:
-   - Constrained 430px mobile viewport matches real-world field worker ergonomics.
-   - Eliminates layout fragmentation and ensures immediate responsive utility.
-4. **Utilitarian "Field Operations" Design Stance**:
-   - Distinct anti-AI look: avoids neon gradients, glassmorphism, floating cards, and dark blobs.
-   - Embraces paper-white canvas, ticket-style perforated edges, high-contrast monospace financial data, and ink-black typography.
+### 1.1 Objectives
+1. **European Guild Realignment**: Restrict geographic operational focus strictly to major populated European metropolitan centers (London, Paris, Berlin, Madrid, Rome, Amsterdam, Barcelona, Vienna), eliminating all legacy Asia/US references.
+2. **Dense Realistic Quest Catalog**: Populate each of the 8 major European cities with at least 10 authentic, locally grounded quests (80+ quests total) adhering to real streets, landmarks, coordinates, and cultural realities.
+3. **Three Canonical Guild Categories**:
+   - **Civil Help**: Lost pets/belongings, wheelchair/elderly escort, safe ride companion / designated driver for vehicle, plant/home caretaking.
+   - **Sensitive**: Subject surveillance/identification, object origin verification & intelligence sourcing, VIP security escort/bodyguarding. **Mandatory Protocol**: To claim a Sensitive bounty, claimants must submit both high-resolution photographic evidence AND a detailed investigation letter/intelligence report with verifiable source attribution.
+   - **Commercial**: Product sourcing & UGC content creation, promotional storefront video/photoshoots, boutique inventory validation.
+4. **AI Verifier Upgrade**: Switch verification engine to **Google Gemini 3.1 Flash-Lite** (`gemini-3.1-flash-lite`) using the verified API key (`AIzaSy...`). For Sensitive quests, the model performs dual-modal verification (evaluating the visual evidence and analyzing the written intelligence report for origin and source authenticity).
+5. **Solana Devnet Settlement**: Confirm escrow balance (5.0 SOL live on Devnet at `JE922ncEr1G2bHrCCRpFDmT9q4y752aN4WxkPS4s1BDn`) and maintain zero-friction native SOL transfers.
 
 ---
 
-### 1.2 Identified Flaws, Bottlenecks & Critical Failure Modes (Pre-Mortem Audit)
+## 2. Flaw Detection & Architectural Bottlenecks (Current State)
 
-| # | Flaw / Bottleneck Category | Technical Vulnerability | Impact | 10x Architectural Mitigation & Resolution |
-|---|----------------------------|-------------------------|--------|-------------------------------------------|
-| **F-01** | **Solana Devnet RPC Instability & Rate Limits** | Public `api.devnet.solana.com` frequently experiences 429 Too Many Requests, socket dropouts, or delays exceeding 15 seconds during transaction confirmation. | Demo fails or hangs with infinite spinners during judging. | **Multi-RPC Fallback Pool & Local Mock/Replay Fallback**: Configure a resilient RPC client with exponential backoff across multiple RPC endpoints (e.g. Ankr, QuickNode, Helius, Solana public). In the event of persistent network partition, seamlessly fall back to local cryptographic simulation with pre-cached Devnet explorer links and clear badge indicators. |
-| **F-02** | **Custodial Trust & Key Exposure Risk** | Using a single backend escrow wallet without per-task derivation or transaction locking can lead to double-spend race conditions if two claims settle simultaneously. | Race condition / double-settlement of task bounty. | **Database Row-Level State Locks & Idempotency Keys**: Use SQLite atomic transactions (`BEGIN IMMEDIATE`) with state transitions strictly conditioned on `status == 'CLAIMED'`. Every settlement generates an idempotency key (`hash(task_id + claim_id + worker_address)`) checked before signing the payout transfer. |
-| **F-03** | **Vision API Latency & Network Failure** | Relying synchronously on remote Multimodal Vision APIs (Gemini Flash / OpenAI Vision) introduces 2–6 second latency, payload size timeouts, and API quota risks. | Submission hangs at Tier 2 verification step; judges wait indefinitely. | **Three-Layer Vision Engine (API + Embedded Local Heuristic + Instant Preset Cache)**: Compute SHA-256 and perceptual hash immediately. If hash matches test fixtures, return verified result in <200ms. If live photo is uploaded, call Vision API with 8s strict timeout; if unavailable, seamlessly fall back to an on-device/backend image-integrity heuristic (EXIF luminance, sharpness, compression artifact audit) so verification never hangs. |
-| **F-04** | **Browser Geolocation Stripping & Mobile HTTPS Requirements** | Modern browsers (especially Safari iOS and Chrome Mobile) strictly reject `navigator.geolocation` on non-HTTPS origins and silently strip EXIF metadata from file inputs (`<input type="file">`). | Real mobile capture fails to report coordinates or gets rejected for missing GPS. | **Dual Coordinate Intake Strategy**: Collect device coordinates directly via the browser Geolocation API at the moment of button tap, and merge with EXIF tags parsed via `piexif`/`exifread`. If metadata is stripped, mark confidence as `Device-Reported (Low Trust)` and allow verification if within 150m. Provide explicit mock location slider / preset pins for testing. |
-| **F-05** | **Task Collisions & Unbounded Claims** | Multiple workers claiming the same bounty simultaneously, or a single worker abandoning a claimed task, locking funds indefinitely. | Deadlocked task bounties; poster cannot recover funds. | **Atomic Lease Timer (10-minute Lock Window)**: Claims include an explicit `expires_at` timestamp. Background query or lazy evaluation on list fetch auto-reverts expired claims back to `OPEN` state, freeing the bounty. |
-| **F-06** | **Client Wallet State Desynchronization** | Browser localStorage gets cleared or out-of-sync with backend ledger; worker attempts claim without valid public key. | Client-side runtime crashes (`Invalid PublicKey`). | **Self-Healing Keypair Composable**: Validates base58 public/secret keys on app mount. If corrupted or missing, regenerates keypair and requests instant backend airdrop via internal faucet endpoint. |
-
----
-
-## 2. Complete Technical Specification & Stack Definition
-
-```
-========================================================================================
-BOUNTYBLINK SYSTEM ARCHITECTURE
-========================================================================================
-┌──────────────────────────────────────────────────────────────────────────────────────┐
-│                                 FRONTEND (VUE 3 SPA)                                 │
-│  - Max-Width: 430px (Centered Mobile Viewport with Paper-White Field Order Theme)     │
-│  - Composition API, Vite, TypeScript, Tailwind CSS, Lucide Icons                     │
-│  - Ephemeral Solana Web3 Demo Wallet (localStorage Base58 Keypair)                   │
-├──────────────────────────────────────────┬───────────────────────────────────────────┤
-│                TAB 1: DO TASKS           │               TAB 2: POST TASK            │
-│  - Live Task Feed (Distance, Reward SOL) │  - Quick Preset Work Orders (EV, Shop)    │
-│  - Perforated Ticket Task Details        │  - Custom Bounty Pin & Radius             │
-│  - Camera & File Intake Flow             │  - Devnet 0.01 SOL Escrow Lock Action     │
-│  - One-Tap Presets: Valid vs Fake Fixture│  - Direct Solana Explorer Transaction Link│
-│  - Real-Time 4-Step Verification Stepper │  - Refund Trigger for Expired Bounties    │
-└──────────────────────────────────────────┴───────────────────────────────────────────┘
-                                   │ HTTP REST API / JSON-RPC
-                                   ▼
-┌──────────────────────────────────────────────────────────────────────────────────────┐
-│                               BACKEND SERVICE (FASTAPI)                              │
-│  - Python 3.12, FastAPI, Uvicorn, SQLite (SQLAlchemy / SQLModel)                      │
-│  - Task & Claim State Machine Engine (Atomic Leases, Expiry Reversions)              │
-│  - Multi-RPC Devnet Transaction Relayer (solders + solana-py)                         │
-├──────────────────────────────────────────────────────────────────────────────────────┤
-│                             VERIFICATION PIPELINE SERVICE                            │
-│  ┌────────────────────────────────────────────────────────────────────────────────┐  │
-│  │ Tier 0: Intake Sanity & SHA-256 / Perceptual Duplicate Hash Detection          │  │
-│  ├────────────────────────────────────────────────────────────────────────────────┤  │
-│  │ Tier 1: Geofence (Haversine Formula <= 150m, EXIF vs Browser GPS Arbitrage)    │  │
-│  ├────────────────────────────────────────────────────────────────────────────────┤  │
-│  │ Tier 2: Multimodal Vision Evaluation (Structured JSON, Prompt-Hardened, Cache) │  │
-│  ├────────────────────────────────────────────────────────────────────────────────┤  │
-│  │ Tier 3: Solana Devnet Settlement (Escrow Vault -> Worker Transfer on Chain)   │  │
-│  └────────────────────────────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────────────────────────────┘
-                                   │ On-Chain Transactions
-                                   ▼
-┌──────────────────────────────────────────────────────────────────────────────────────┐
-│                              SOLANA DEVNET CLUSTER                                   │
-│  - Escrow Vault Keypair: holds locked 0.01 SOL bounties                              │
-│  - Poster Wallet: transfers 0.01 SOL upon task creation                             │
-│  - Worker Wallet: receives 0.01 SOL upon Tier 2 verification pass                    │
-│  - Explorer Links: https://explorer.solana.com/tx/{sig}?cluster=devnet              │
-└──────────────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 3. Database Schema & Data Models (SQLite / SQLAlchemy)
-
-### 3.1 Tables & Indices
-
-#### 1. `tasks`
-- `id` (VARCHAR(36), PK): UUID4 unique identifier.
-- `title` (VARCHAR(120), NOT NULL): Short operational task name (e.g. *"Check Alexanderplatz EV Charger"*).
-- `instruction` (TEXT, NOT NULL): Clear physical verification instruction.
-- `target_description` (TEXT, NOT NULL): Specific visual cues expected by the vision model.
-- `latitude` (FLOAT, NOT NULL): Target latitude coordinates.
-- `longitude` (FLOAT, NOT NULL): Target longitude coordinates.
-- `radius_meters` (INTEGER, DEFAULT 150): Geofence tolerance limit.
-- `reward_sol` (FLOAT, DEFAULT 0.01): Bounty amount in native SOL.
-- `poster_address` (VARCHAR(44), NOT NULL): Base58 public key of task creator.
-- `status` (VARCHAR(20), NOT NULL): Enum (`OPEN`, `CLAIMED`, `PAID`, `REJECTED`, `REFUNDED`).
-- `fund_tx_sig` (VARCHAR(88), NULL): On-chain transaction signature for escrow funding.
-- `payout_tx_sig` (VARCHAR(88), NULL): On-chain transaction signature for worker payout.
-- `refund_tx_sig` (VARCHAR(88), NULL): On-chain transaction signature for creator refund.
-- `created_at` (DATETIME, NOT NULL): Creation timestamp.
-- `expires_at` (DATETIME, NOT NULL): Bounty deadline (default 24h from creation).
-
-#### 2. `claims`
-- `id` (VARCHAR(36), PK): UUID4 identifier.
-- `task_id` (VARCHAR(36), FK -> `tasks.id`, NOT NULL): Referenced task.
-- `worker_address` (VARCHAR(44), NOT NULL): Base58 public key of claiming worker.
-- `claimed_at` (DATETIME, NOT NULL): Claim initiation timestamp.
-- `expires_at` (DATETIME, NOT NULL): Claim exclusive lease deadline (default 10 mins).
-- `status` (VARCHAR(20), NOT NULL): Enum (`ACTIVE`, `SUBMITTED`, `EXPIRED`, `RELEASED`).
-
-#### 3. `submissions`
-- `id` (VARCHAR(36), PK): UUID4 identifier.
-- `task_id` (VARCHAR(36), FK -> `tasks.id`, NOT NULL): Target task.
-- `claim_id` (VARCHAR(36), FK -> `claims.id`, NOT NULL): Associated claim.
-- `worker_address` (VARCHAR(44), NOT NULL): Submitting worker.
-- `file_hash` (VARCHAR(64), NOT NULL): SHA-256 digest of uploaded evidence.
-- `perceptual_hash` (VARCHAR(32), NULL): Image perceptual hash.
-- `image_path` (VARCHAR(255), NOT NULL): Path to stored image on disk.
-- `submitted_lat` (FLOAT, NULL): Geolocation latitude reported or extracted.
-- `submitted_lon` (FLOAT, NULL): Geolocation longitude reported or extracted.
-- `location_source` (VARCHAR(20), NOT NULL): Enum (`EXIF_GPS`, `BROWSER_GPS`, `FIXTURE`).
-- `distance_meters` (FLOAT, NULL): Computed Haversine distance to target.
-- `tier0_pass` (BOOLEAN, NOT NULL): Intake & anti-duplicate check.
-- `tier1_pass` (BOOLEAN, NOT NULL): Geofence boundary check.
-- `tier2_pass` (BOOLEAN, NOT NULL): Vision model validation.
-- `vision_confidence` (FLOAT, NULL): Vision model score (0–100).
-- `vision_reason` (TEXT, NULL): Structured reasoning from verifier.
-- `final_status` (VARCHAR(20), NOT NULL): Enum (`PAID`, `REJECTED`).
-- `created_at` (DATETIME, NOT NULL): Timestamp of submission.
-
----
-
-## 4. API Endpoints Specification
-
-| Method | Endpoint | Description | Request Body / Params | Response Payload |
+| # | Component | Current Implementation | Identified Flaw / Bottleneck | Architectural Solution |
 |---|---|---|---|---|
-| `GET` | `/api/tasks` | List all open and active tasks | `status?: string, lat?: float, lon?: float` | `TaskSummary[]` |
-| `GET` | `/api/tasks/{task_id}` | Detailed task data, status & tx links | None | `TaskDetail` |
-| `POST` | `/api/tasks` | Create new bounty & lock 0.01 SOL in escrow | `{ title, instruction, target_description, lat, lon, reward_sol, poster_address }` | `{ task: Task, fund_tx_sig: string, explorer_url: string }` |
-| `POST` | `/api/tasks/{task_id}/claim` | Worker exclusively claims task for 10 mins | `{ worker_address: string }` | `{ claim: Claim, expires_at: string }` |
-| `POST` | `/api/tasks/{task_id}/submit` | Submit evidence (multipart photo or fixture) | Multipart: `photo?: UploadFile, fixture_type?: "VALID" \| "FAKE", browser_lat?: float, browser_lon?: float, worker_address: string` | `{ result: SubmissionResult, payout_tx_sig?: string, reason: string }` |
-| `POST` | `/api/tasks/{task_id}/refund` | Refund locked funds back to poster if failed/expired | `{ poster_address: string }` | `{ refund_tx_sig: string, explorer_url: string }` |
-| `GET` | `/api/wallet/faucet/{address}` | Airdrop / transfer 0.02 Devnet SOL to demo wallet | None | `{ tx_sig: string, balance: float }` |
-| `POST` | `/api/demo/reset` | Purge database & re-seed standard tasks & fixtures | None | `{ status: "ok", tasks_count: int }` |
-| `GET` | `/api/demo/presets` | Get pre-packaged valid/fake image fixtures | None | `{ valid_fixture: FixtureMeta, fake_fixture: FixtureMeta }` |
+| **F-01** | **Backend Models & DB Schema** | `Submission` table only stores `file_hash` and `image_path`. | Sensitive jobs require a full investigation letter and source citation. The database has no column to persist this report or audit it post-settlement. | Add `investigation_letter` (Text), `source_info` (Text), and `letter_file_path` (String) to `Submission` model; run automated migration script. |
+| **F-02** | **Intake & Verification API** | `/api/tasks/{task_id}/submit` only accepts `photo: UploadFile`. | Form schema cannot receive written reports or source documents for Sensitive quests. | Update FastAPI endpoint with multipart form fields: `investigation_letter: Optional[str]`, `source_info: Optional[str]`, `letter_file: Optional[UploadFile]`. |
+| **F-03** | **Gemini Vision Pipeline** | `verifier_service.py` evaluates single image against `instruction` and `target_desc`. | For Sensitive tasks, fraud or low-effort submissions can bypass verification if only a generic photo is uploaded without cross-examining the intelligence report. | Expand `verifier_service.py` to prompt Gemini 3.1 Flash-Lite with dual inputs (Image + Investigation Letter). Require minimum report depth, source attribution check, and visual consistency score. |
+| **F-04** | **Quest Seeds & City Gating** | Database has only 8 tasks and includes Tokyo; location cards show Tokyo. | Geographic fragmentation; fails the "Europe only" and "10+ quests per major city" requirements. | Purge Tokyo seeds. Build comprehensive seed dictionary with 80+ geocoded quests across 8 major European hubs (10+ per city). |
+| **F-05** | **Frontend Submission UX** | Mobile/desktop trigger is a raw file input (`<input type="file">`). | Claimants on Sensitive tasks have no input field to write or attach their investigation letter. | Implement a dedicated **Sensitive Intelligence Submission Modal** in Vue 3 with structured dossier inputs (Photo proof + Written investigation report + Intelligence source). |
+| **F-06** | **Category UI & Issue Form** | `PostTaskForm.vue` has generic category selector. | Posters cannot configure specific Sensitive requirements (e.g. required intelligence fields), and category names are inconsistent (`Sensitive Task` vs `Sensitive`). | Standardize to `Civil Help`, `Sensitive`, `Commercial`. Add category helper cards and an explicit warning banner on `Sensitive` detailing the dual-evidence mandate. |
+| **F-07** | **AI Model Target** | `config.py` and `.env` specify `gemini-2.5-flash`. | User explicitly directed to use `gemini-3.1-flash-lite`. | Update `.env` and `config.py` to `gemini-3.1-flash-lite`. |
 
 ---
 
-## 5. UI/UX & Visual Design System (Anti-AI Utilitarian Stance)
+## 3. Database Architecture & Schema Specification
 
-### 5.1 Design Tokens & Colors
-- **Canvas / Background**: `#F8F6F0` (warm off-white unbleached stock paper).
-- **Secondary Surfaces**: `#EFECE4` (subtle contrast card backgrounds).
-- **Ink / Text Primary**: `#161614` (dense deep charcoal ink, contrast ratio > 12:1).
-- **Ink Secondary**: `#63625C` (muted slate annotations and metadata).
-- **Signal Orange (Action Accent)**: `#EA580C` / `#D9480F` (high-visibility safety orange for primary CTA buttons).
-- **Settlement Green (Pass Only)**: `#15803D` (deep forest green stamp).
-- **Rejection Red (Fail Only)**: `#B91C1C` (crimson warning stamp).
-- **Strictly Banned**: No purple/cyan gradients, no neon buttons, no frosted blurred glass panels, no floating angled 3D mockups.
+### 3.1 Updated `tasks` Table (SQLite)
+```sql
+CREATE TABLE tasks (
+    id VARCHAR(36) PRIMARY KEY,
+    title VARCHAR(140) NOT NULL,
+    category VARCHAR(50) NOT NULL,          -- 'Civil Help', 'Sensitive', 'Commercial'
+    instruction TEXT NOT NULL,
+    target_description TEXT NOT NULL,
+    forbidden_description TEXT,
+    place_name VARCHAR(120),
+    full_address VARCHAR(255),
+    city VARCHAR(80) NOT NULL,              -- London, Paris, Berlin, Madrid, Rome, Amsterdam, Barcelona, Vienna
+    country VARCHAR(80) NOT NULL,
+    latitude FLOAT NOT NULL,
+    longitude FLOAT NOT NULL,
+    radius_meters INTEGER DEFAULT 150,
+    photos_required INTEGER DEFAULT 1,
+    finish_window_minutes INTEGER DEFAULT 15,
+    reward_sol FLOAT DEFAULT 0.035,
+    poster_address VARCHAR(44) NOT NULL,
+    status VARCHAR(20) DEFAULT 'OPEN',      -- 'OPEN', 'CLAIMED', 'PAID', 'REJECTED', 'REFUNDED'
+    reference_photo_url VARCHAR(255),
+    fund_tx_sig VARCHAR(88),
+    payout_tx_sig VARCHAR(88),
+    refund_tx_sig VARCHAR(88),
+    active_claim_id VARCHAR(36),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL
+);
+CREATE INDEX idx_tasks_city_category ON tasks(city, category);
+CREATE INDEX idx_tasks_status ON tasks(status);
+```
 
-### 5.2 Typography
-- **Headlines**: `Fraunces`, `serif` — used sparingly for operational titles and screen headers.
-- **Interface & Body**: `Inter Tight`, `-apple-system`, `sans-serif` — compact, legible UI typography.
-- **Numbers, Hashes, Coordinates & Currency**: `JetBrains Mono` or `Geist Mono` — tabular numerals enabled (`font-variant-numeric: tabular-nums`).
-
-### 5.3 Ergonomics & Layout
-- Centered container with `max-w-[430px]`, full min-h-screen, safe-area insets (`env(safe-area-inset-bottom)`).
-- Sticky bottom action bar within natural thumb reach (>48px touch targets).
-- Perforated ticket styling: dashed separating rules (`border-dashed border-stone-300`), barcode/ID badges, and physical work-order stamps.
+### 3.2 Updated `submissions` Table (SQLite)
+```sql
+CREATE TABLE submissions (
+    id VARCHAR(36) PRIMARY KEY,
+    task_id VARCHAR(36) NOT NULL,
+    claim_id VARCHAR(36) NOT NULL,
+    worker_address VARCHAR(44) NOT NULL,
+    file_hash VARCHAR(64) NOT NULL,
+    image_path VARCHAR(255) NOT NULL,
+    investigation_letter TEXT,              -- Mandatory for 'Sensitive' category
+    source_info TEXT,                       -- Source of intelligence/origin
+    letter_file_path VARCHAR(255),          -- Optional uploaded report document
+    submitted_lat FLOAT,
+    submitted_lon FLOAT,
+    location_source VARCHAR(20) DEFAULT 'DEVICE',
+    distance_meters FLOAT,
+    tier0_pass BOOLEAN DEFAULT 0,           -- Intake & hash duplicate check
+    tier1_pass BOOLEAN DEFAULT 0,           -- Geofence tolerance check
+    tier2_pass BOOLEAN DEFAULT 0,           -- Gemini 3.1 Flash-Lite evaluation
+    vision_confidence FLOAT DEFAULT 0.0,
+    vision_reason TEXT,
+    final_status VARCHAR(20) DEFAULT 'REJECTED',
+    tokens_used INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(task_id) REFERENCES tasks(id),
+    FOREIGN KEY(claim_id) REFERENCES claims(id)
+);
+```
 
 ---
 
-## 6. Execution Order & Implementation Phases
+## 4. Backend System Architecture & API Contracts
 
-1. **Step 1: Backend Foundation & Multi-RPC Solana Service**:
-   - Establish `/backend` virtualenv and install dependencies.
-   - Configure SQLite models with automated seed migration.
-   - Implement `solana_service.py` with multi-RPC fallback, Devnet transfer logic, balance queries, and explorer URL builders.
-   - Implement `verifier_service.py` (Tier 0 duplicate hash, Tier 1 Haversine distance, Tier 2 vision analysis with fixture cache).
-   - Expose and test all REST endpoints.
-2. **Step 2: Seed Fixture Assets & Ground-Truth Test Cases**:
-   - Prepare bundled high-res fixture images:
-     - `valid_storefront.jpg`: Matching GPS within 50m of preset task, authentic daylight photo of shop.
-     - `fake_screen_capture.jpg`: Moire patterns/mismatched coordinates/stock photo of storefront.
-3. **Step 3: Frontend Scaffolding & Mobile Shell**:
-   - Scaffold Vite + Vue 3 + TypeScript in `/frontend`.
-   - Setup Tailwind theme tokens, typography, and mobile frame.
-   - Implement in-app ephemeral Solana Keypair manager (`useWallet.ts`) with zero-friction airdrop check.
-4. **Step 4: Do Tasks & Post Task Views**:
-   - Build **Do Tasks** feed with ticket cards, distance calculators, and live status badges.
-   - Build **Task Detail & Claim** flow with active 10-minute lease countdown.
-   - Build **Submission & Verification Stepper**:
-     - Live 4-step stepper with animated progress transitions.
-     - One-click **"Test: Valid photo"** and **"Test: Fake photo"** fixture buttons alongside native camera upload.
-   - Build **Post Task** form with one-tap presets, instant 0.01 SOL escrow lock, and Explorer link generation.
-5. **Step 5: End-to-End Verification & Flaw Audit Validation**:
-   - Verify valid flow: Task Claim -> Submit Valid Fixture -> Pass Tier 0/1/2 -> Escrow transfers 0.01 SOL to worker -> Valid Devnet tx hash verified.
-   - Verify invalid flow: Task Claim -> Submit Fake Fixture -> Fail Tier 1/2 -> Reason displayed -> Refund button returns 0.01 SOL to poster -> Devnet tx hash verified.
-   - Review and ensure compliance with all user rules.
+### 4.1 REST Endpoints
+
+#### 1. `POST /api/tasks/{task_id}/submit` (Multi-Evidence Intake)
+- **Content-Type**: `multipart/form-data`
+- **Fields**:
+  - `worker_address`: `string` (Base58 public key)
+  - `photo`: `UploadFile` (JPG/PNG photographic evidence)
+  - `fixture_type`: `Optional[str]` (`"VALID"` | `"FAKE"`)
+  - `browser_lat`: `Optional[float]`
+  - `browser_lon`: `Optional[float]`
+  - `investigation_letter`: `Optional[str]` (**Required if `task.category == 'Sensitive'`**)
+  - `source_info`: `Optional[str]` (**Required if `task.category == 'Sensitive'`**)
+  - `letter_file`: `Optional[UploadFile]` (Optional PDF/TXT document upload)
+
+#### 2. `POST /api/demo/reset` (Reseed European Catalog)
+- Purges database and executes transactional seeding of 80+ verified quests across the 8 European capitals with authentic coordinates.
+
+---
+
+## 5. Gemini 3.1 Flash-Lite Verifier Service Specification
+
+### 5.1 Dual-Modal Verification Prompt Design
+For **Sensitive** tasks, Gemini 3.1 Flash-Lite evaluates both the image and the written intelligence report:
+
+```python
+class SensitiveVerificationResult(BaseModel):
+    is_authentic_onsite: bool
+    matches_target_criteria: bool
+    report_completeness_score: float  # 0 to 100
+    source_credibility_score: float   # 0 to 100
+    confidence_score: float           # Combined score
+    detected_objects: list[str]
+    report_assessment: str
+    reason: str
+```
+
+**Verification Rule Engine**:
+1. **Civil Help / Commercial**:
+   - Validates physical photographic realism, on-site presence, and target match with threshold >= 80.0%.
+2. **Sensitive Tasks**:
+   - Rejects if `investigation_letter` is empty or < 50 characters.
+   - Evaluates:
+     a) Photographic confirmation of subject/object origin.
+     b) Quality, detail, and internal coherence of the written letter.
+     c) Explicit declaration of the information source.
+   - Requires confidence_score >= 80.0% AND report_completeness_score >= 75.0%.
+
+---
+
+## 6. European Metropolis Distribution & Quest Inventory (80+ Quests)
+
+| City | Country | Coordinates (Lat, Lon) | Quest Count | Core Quest Examples |
+|---|---|---|---|---|
+| **London** | United Kingdom | `51.5074, -0.1278` | **10+** | *Civil*: Safe night ride companion from Soho to Shoreditch; Lost velvet sketchbook in Camden Market.<br>*Sensitive*: Discreetly log license plate & delivery origin of black courier van in Mayfair; VIP close-escrow protection walk to Bank station.<br>*Commercial*: UGC promotional reel at Borough Market artisan bakery; Storefront display audit on Regent St. |
+| **Paris** | France | `48.8566, 2.3522` | **10+** | *Civil*: Search for lost Siamese cat near Montmartre stairs; Assist elderly patron navigating Louvre carousel ramp.<br>*Sensitive*: Track origin serial numbers on vintage timepiece collection in Le Marais; Background check on gallery exhibition courier.<br>*Commercial*: Artisan perfume showcase photo at Palais-Royal; French pastry menu photoshoot in Belleville. |
+| **Berlin** | Germany | `52.5200, 13.4050` | **10+** | *Civil*: Find lost calico cat 'Mika' at Boxhagener Platz; Wheelchair navigation at Warschauer Str. U-Bahn.<br>*Sensitive*: Document clandestine graffiti tagger identity along Spree riverbank; Security companion through Görlitzer Park at dusk.<br>*Commercial*: Independent vinyl shop promotional reel in Friedrichshain; Craft brewery taproom feature photo. |
+| **Madrid** | Spain | `40.4168, -3.7038` | **10+** | *Civil*: Find lost golden retriever in El Retiro Park; Designated driver escort from Malasaña tapas tour.<br>*Sensitive*: Verify ownership lineage & physical provenance of antique bullfighting poster; Document suspicious courier meet at Atocha.<br>*Commercial*: Traditional churrería promotional photoshoot; Boutique leather shop showcase on Gran Vía. |
+| **Rome** | Italy | `41.9028, 12.4964` | **10+** | *Civil*: Retrieve lost leather wallet near Trevi fountain steps; Plant watering & terrace safety check in Trastevere.<br>*Sensitive*: Document unauthorized street vendors operating near Colosseum arches; Source confirmation of Roman antique coin hoard.<br>*Commercial*: Espresso bar morning UGC reel in Campo de' Fiori; Artisan pasta workshop promotional shoot. |
+| **Amsterdam** | Netherlands | `52.3676, 4.9041` | **10+** | *Civil*: Fish out lost house keys dropped near Prinsengracht canal bridge; Assist tourist on tandem bike repair near Jordaan.<br>*Sensitive*: Inspect maritime shipping registry plaque at Western Docklands; Security escort during late canal crossing.<br>*Commercial*: Botanical tulip boutique promotional reel; Vintage clothing storefront display audit in De Pijp. |
+| **Barcelona** | Spain | `41.3879, 2.1699` | **10+** | *Civil*: Search for lost drone near Park Güell stone viaduct; Help grandmother with grocery haul up Gràcia stairs.<br>*Sensitive*: Verify authenticity & provenance of ceramic tile mosaic sample; Security escort near Gothic Quarter alleyways at midnight.<br>*Commercial*: Beachside tapas bar cocktail photoshoot; Skateboarding brand UGC video near MACBA plaza. |
+| **Vienna** | Austria | `48.2082, 16.3738` | **10+** | *Civil*: Find lost violin bow case near Musikverein arcade; Wheelchair escort across cobblestone courtyard at Hofburg.<br>*Sensitive*: Verify provenance seal on rare classical manuscript in antique bookstore; Night surveillance of unauthorized courtyard access.<br>*Commercial*: Viennese coffeehouse Sachertorte promotional photo; Luxury porcelain boutique window display audit. |
+
+---
+
+## 7. Frontend User Experience & Component Enhancements
+
+### 7.1 Category Reclassification & Disclosures
+- **`PostTaskForm.vue`**:
+  - Update category options to: `['Civil Help', 'Sensitive', 'Commercial']`.
+  - Add contextual description cards for each category.
+  - When **Sensitive** is selected:
+    - Display an amber/gold institutional badge:
+      > **"Sensitive Protocol Required: Claimants must provide both physical photo evidence AND a formal investigation letter with intelligence source attribution."**
+    - Enable custom requirement fields for the letter criteria.
+
+### 7.2 Dedicated Sensitive Intelligence Submission Modal
+- In `App.vue`:
+  - When a user claims an `OPEN` task, status transitions to `CLAIMED`.
+  - If `category === 'Civil Help'` or `'Commercial'`: Clicking action triggers direct camera/photo picker.
+  - If `category === 'Sensitive'`: Clicking action opens the **Sensitive Investigation Dossier Modal**:
+    - **Section 1: Photographic Proof**: File uploader with preview for target subject or origin.
+    - **Section 2: Investigation Letter**: High-contrast, formatted textarea with minimum word counter (origin details, observations, timestamped findings).
+    - **Section 3: Intelligence Source**: Text input specifying the source (e.g. *Witness statement, municipal public registry, physical inspection, direct observation*).
+    - **Section 4: Optional Attachment**: Supporting PDF/TXT report document upload.
+    - Submit button with spinner triggering `/api/tasks/{task_id}/submit`.
+
+### 7.3 City Filter Bar & Map Sync
+- **`TaskFilters.vue` & `LocationPermissionCard.vue`**:
+  - Replace cities list with: `['London', 'Paris', 'Berlin', 'Madrid', 'Rome', 'Amsterdam', 'Barcelona', 'Vienna']`.
+- **`MapCanvas.vue`**:
+  - Add smooth fly-to centering when the user switches European cities.
+
+---
+
+## 8. Step-by-Step Implementation Roadmap
+
+1. **Step 1: Configuration & Environment**
+   - Update `backend/config.py` and `backend/.env` with `GEMINI_MODEL=gemini-3.1-flash-lite`.
+
+2. **Step 2: Database Models & Migration**
+   - Update `Submission` in `backend/models.py` with `investigation_letter`, `source_info`, and `letter_file_path`.
+   - Run safe database migration script to alter existing SQLite database without data loss.
+
+3. **Step 3: Verifier Service Dual-Modal Engine**
+   - Update `backend/verifier_service.py` to support `gemini-3.1-flash-lite`.
+   - Implement dual-modal evaluation prompt and strict validation logic for `Sensitive` submissions.
+
+4. **Step 4: Seed Data Overhaul (80+ European Quests)**
+   - Construct complete, authentic seed dataset of 80+ quests across London, Paris, Berlin, Madrid, Rome, Amsterdam, Barcelona, Vienna.
+   - Update `seed_demo_data` in `backend/main.py`.
+
+5. **Step 5: Backend Endpoint Enhancements**
+   - Update `/api/tasks/{task_id}/submit` to parse multipart form fields for investigation letters and source info.
+
+6. **Step 6: Frontend UI Component Updates**
+   - Update `TaskFilters.vue` and `LocationPermissionCard.vue` with 8 European cities and 3 categories.
+   - Update `PostTaskForm.vue` with category definitions and sensitive job disclosures.
+   - Implement the **Sensitive Dossier Submission Modal** in `App.vue` and integrate with `/api/tasks/{task_id}/submit`.
+   - Update `DemoToolsDrawer.vue` to supply realistic mock investigation letters when testing Sensitive tasks with one tap.
+
+7. **Step 7: Verification & Testing**
+   - Test `Civil Help` photo submission & payout.
+   - Test `Sensitive` photo + investigation letter submission & Gemini 3.1 Flash-Lite dual verification.
+   - Verify on-chain Devnet settlement from the funded 5.0 SOL escrow vault.
+
+---
+
+## 9. Constraints, Risks & Assumptions
+
+1. **Escrow Solvency**: The backend Escrow Vault (`JE922nc...`) is confirmed funded with **5.0 SOL**, which guarantees headroom for at least 100+ on-chain payouts of 0.035–0.05 SOL each.
+2. **Devnet RPC Availability**: Standard public RPC (`api.devnet.solana.com`) with local fallback simulation ensures uninterrupted judging even during Devnet congestion.
+3. **Gemini 3.1 Flash-Lite Quotas**: Verified active on your API key; latency is low (<1.5s), ensuring rapid verification stepper feedback.

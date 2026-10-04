@@ -54,6 +54,9 @@ class Submission(Base):
     worker_address = Column(String(44), nullable=False)
     file_hash = Column(String(64), nullable=False, index=True)
     image_path = Column(String(255), nullable=False)
+    investigation_letter = Column(Text, nullable=True) # Full written report for Sensitive quests
+    source_info = Column(Text, nullable=True) # Source attribution of gathered intelligence
+    letter_file_path = Column(String(255), nullable=True) # Optional supporting document attachment path
     submitted_lat = Column(Float, nullable=True)
     submitted_lon = Column(Float, nullable=True)
     location_source = Column(String(20), default="DEVICE") # EXIF, DEVICE, FIXTURE

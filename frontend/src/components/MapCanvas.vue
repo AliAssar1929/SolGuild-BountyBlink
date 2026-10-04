@@ -177,8 +177,18 @@ watch(() => props.selectedTask, () => {
   drawGeofenceCircle()
 })
 
-watch(() => props.tasks, () => {
+watch(() => props.tasks, (newTasks) => {
   updateMarkers()
+  if (map && newTasks && newTasks.length > 0 && !props.selectedTask) {
+    const avgLng = newTasks.reduce((acc, t) => acc + t.longitude, 0) / newTasks.length
+    const avgLat = newTasks.reduce((acc, t) => acc + t.latitude, 0) / newTasks.length
+    map.easeTo({
+      center: [avgLng, avgLat],
+      zoom: 12.5,
+      duration: 600,
+      essential: true
+    })
+  }
 }, { deep: true })
 
 onMounted(() => {

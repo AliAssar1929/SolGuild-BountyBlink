@@ -14,6 +14,7 @@ import TaskFilters from './components/TaskFilters.vue'
 import LocationPermissionCard from './components/LocationPermissionCard.vue'
 import WalletModal from './components/WalletModal.vue'
 import UserProfileModal from './components/UserProfileModal.vue'
+import SensitiveDossierModal from './components/SensitiveDossierModal.vue'
 import EmptyState from './components/EmptyState.vue'
 import { useSolPrice } from './composables/useSolPrice'
 
@@ -30,7 +31,8 @@ import {
   RotateCcw,
   Wallet,
   Shield,
-  Scroll
+  Scroll,
+  FileText
 } from 'lucide-vue-next'
 
 const { 
@@ -80,12 +82,13 @@ const currentTab = ref<'feed' | 'post' | 'activity' | 'profile'>('feed')
 const showDemoDrawer = ref(false)
 const showWalletModal = ref(false)
 const showProfileModal = ref(false)
+const showSensitiveDossierModal = ref(false)
 const showLocationPrompt = ref(true)
 
 // Post a task live sticky data
 const livePostData = ref<any>({
   title: '',
-  category: 'Pet Rescue',
+  category: 'Civil Help',
   placeName: '',
   fullAddress: '',
   city: 'Berlin',
@@ -288,7 +291,13 @@ const claimTask = async () => {
   }
 }
 
-const submitEvidence = async (fixtureType?: 'VALID' | 'FAKE', file?: File) => {
+const submitEvidence = async (
+  fixtureType?: 'VALID' | 'FAKE',
+  file?: File,
+  investigationLetter?: string,
+  sourceInfo?: string,
+  letterFile?: File
+) => {
   if (!selectedTask.value) return
   showDemoDrawer.value = false
   isSubmitting.value = true
@@ -296,8 +305,22 @@ const submitEvidence = async (fixtureType?: 'VALID' | 'FAKE', file?: File) => {
 
   const formData = new FormData()
   formData.append('worker_address', publicKey.value)
-  if (fixtureType) formData.append('fixture_type', fixtureType)
+  if (fixtureType) {
+    formData.append('fixture_type', fixtureType)
+    // For Sensitive tasks triggered via demo fixture drawer, provide a realistic valid dossier
+    if (selectedTask.value.category === 'Sensitive') {
+      if (!investigationLetter) {
+        investigationLetter = `CONFIDENTIAL FIELD INVESTIGATION REPORT\nTarget observed and confirmed on-site at ${selectedTask.value.place_name || selectedTask.value.city || 'designated location'}. Visual identity verification executed according to protocol specifications: ${selectedTask.value.target_description}. Chain of custody secured.`
+      }
+      if (!sourceInfo) {
+        sourceInfo = 'Field operative direct surveillance & geotagged optical confirmation'
+      }
+    }
+  }
   if (file) formData.append('photo', file)
+  if (investigationLetter) formData.append('investigation_letter', investigationLetter)
+  if (sourceInfo) formData.append('source_info', sourceInfo)
+  if (letterFile) formData.append('letter_file', letterFile)
 
   setTimeout(() => { currentStep.value = 2 }, 600)
   setTimeout(() => { currentStep.value = 3 }, 1200)
@@ -322,6 +345,11 @@ const submitEvidence = async (fixtureType?: 'VALID' | 'FAKE', file?: File) => {
     console.error(err)
     isSubmitting.value = false
   }
+}
+
+const handleDossierSubmit = (payload: { photo: File; investigationLetter: string; sourceInfo: string; letterFile?: File }) => {
+  showSensitiveDossierModal.value = false
+  submitEvidence(undefined, payload.photo, payload.investigationLetter, payload.sourceInfo, payload.letterFile)
 }
 
 const triggerRefund = async () => {
@@ -625,6 +653,17 @@ onMounted(async () => {
                   <div>Take the photo within {{ selectedTask.radius_meters || 150 }} m of the pin.</div>
                   <div>You have {{ selectedTask.finish_window_minutes || 10 }} minutes to submit after claiming.</div>
                 </div>
+
+                <!-- Sensitive Protocol Banner -->
+                <div v-if="selectedTask.category === 'Sensitive'" class="p-3 rounded-[10px] bg-[#FFFBEB] border border-[#FDE68A] text-[13px] text-[#92400E] space-y-1">
+                  <div class="font-semibold flex items-center gap-1.5">
+                    <FileText class="w-4 h-4 text-[#B45309]" />
+                    <span>Sensitive Quest Protocol Active</span>
+                  </div>
+                  <p class="text-[12px] leading-relaxed text-[#78350F]">
+                    To claim this reward, you must submit both verifiable photographic proof and a detailed investigation letter (minimum 35 characters) with declared intelligence source attribution.
+                  </p>
+                </div>
               </div>
 
               <!-- Live Verification checking steps -->
@@ -672,6 +711,16 @@ onMounted(async () => {
                 class="w-full h-12 rounded-[12px] bg-[#FFD60A] hover:brightness-95 text-[#1A1A17] font-semibold text-[15px] transition-all flex items-center justify-center shadow-xs"
               >
                 Claim this task
+              </button>
+
+              <!-- Sensitive Dossier Trigger Button -->
+              <button 
+                v-else-if="selectedTask.status === 'CLAIMED' && !isSubmitting && !verificationResult && selectedTask.category === 'Sensitive'"
+                @click="showSensitiveDossierModal = true"
+                class="w-full h-12 rounded-[12px] bg-[#FFD60A] hover:brightness-95 text-[#1A1A17] font-semibold text-[15px] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+              >
+                <FileText class="w-4 h-4" />
+                <span>Submit Intelligence Dossier & Photo</span>
               </button>
 
               <label 
@@ -1156,6 +1205,14 @@ onMounted(async () => {
       :userProfile="userProfile"
       @close="showProfileModal = false"
       @profileUpdated="refreshProfile"
+    />
+
+    <SensitiveDossierModal 
+      :isOpen="showSensitiveDossierModal" 
+      :task="selectedTask" 
+      :submitting="isSubmitting" 
+      @close="showSensitiveDossierModal = false" 
+      @submitDossier="handleDossierSubmit" 
     />
 
   </div>

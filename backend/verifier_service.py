@@ -14,6 +14,16 @@ class VisionVerificationResult(BaseModel):
     detected_objects: list[str] = Field(description="List of physical objects or elements detected in the photo.")
     reason: str = Field(description="Concise factual explanation of the verdict.")
 
+class SensitiveVerificationResult(BaseModel):
+    is_authentic_onsite: bool = Field(description="True if the uploaded photo is an authentic physical photograph of the target subject or object.")
+    matches_target_criteria: bool = Field(description="True if the photograph shows the specific individual, vehicle, object, or location requested.")
+    report_completeness_score: float = Field(description="Completeness, structure, and factual detail level of the investigation letter between 0 and 100.")
+    source_credibility_score: float = Field(description="Plausibility and traceability of the declared intelligence source between 0 and 100.")
+    confidence_score: float = Field(description="Overall verification score between 0 and 100.")
+    detected_objects: list[str] = Field(description="Key objects or people detected in the photograph.")
+    report_assessment: str = Field(description="Evaluation of the investigation letter and source citation.")
+    reason: str = Field(description="Clear explanation of the final approval or rejection.")
+
 class VerifierService:
     def __init__(self):
         self._gemini_client = None
@@ -82,7 +92,7 @@ class VerifierService:
         return r * c
 
     def _call_gemini_vision(self, file_path: str, instruction: str, target_desc: str) -> Optional[Dict[str, Any]]:
-        """Invokes Gemini 2.5 Flash with structured output schema for strict physical verification."""
+        """Invokes Gemini 3.1 Flash-Lite with structured output schema for strict physical verification."""
         if not self._gemini_client:
             self._init_gemini()
         if not self._gemini_client:
@@ -103,7 +113,7 @@ class VerifierService:
                 "4. Be strict: If it's a random unrelated image, a selfie, a meme, an empty room, or does not match the requested criteria, reject it immediately."
             )
 
-            model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
+            model_name = getattr(settings, "GEMINI_MODEL", "gemini-3.1-flash-lite")
             response = self._gemini_client.models.generate_content(
                 model=model_name,
                 contents=[prompt, pil_image],
@@ -125,6 +135,67 @@ class VerifierService:
             print(f"[VerifierService] Gemini Vision call error: {e}")
             return None
 
+    def _call_gemini_sensitive_verification(
+        self,
+        file_path: str,
+        instruction: str,
+        target_desc: str,
+        investigation_letter: str,
+        source_info: str
+    ) -> Optional[Dict[str, Any]]:
+        """Invokes Gemini 3.1 Flash-Lite with dual inputs: physical photo evidence + investigation letter dossier."""
+        if not self._gemini_client:
+            self._init_gemini()
+        if not self._gemini_client:
+            return None
+
+        try:
+            from google.genai import types
+            pil_image = Image.open(file_path)
+
+            prompt = (
+                "You are an uncompromising intelligence verification officer for BountyBlink's Sensitive Operations Guild.\n"
+                f"Task Instruction: {instruction}\n"
+                f"Expected Target/Origin Criteria: {target_desc}\n\n"
+                "--- SUBMITTED INTELLIGENCE DOSSIER ---\n"
+                f"Declared Intelligence Source: {source_info}\n"
+                f"Investigation Letter / Field Report:\n{investigation_letter}\n"
+                "--------------------------------------\n\n"
+                "VERIFICATION MANDATE:\n"
+                "1. Visual Evidence Check: Does the submitted photo show genuine physical evidence of the target individual, vehicle, object origin, or physical site? Reject screen captures, moiré stripes, internet stock photos, or unrelated images.\n"
+                "2. Report Quality & Detail: Is the investigation letter a thorough, coherent, and realistic field report detailing observations, timeline, and findings?\n"
+                "3. Source Traceability: Does the declared source (e.g. municipal record, eyewitness interview, vehicle registration audit, on-site surveillance) align with the reported facts?\n"
+                "4. Be uncompromising. If the report is gibberish, a brief sentence, or disconnected from the photo, reject it immediately."
+            )
+
+            model_name = getattr(settings, "GEMINI_MODEL", "gemini-3.1-flash-lite")
+            response = self._gemini_client.models.generate_content(
+                model=model_name,
+                contents=[prompt, pil_image],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=SensitiveVerificationResult,
+                    temperature=0.1
+                )
+            )
+            parsed: SensitiveVerificationResult = response.parsed
+            is_pass = (
+                parsed.is_authentic_onsite and
+                parsed.matches_target_criteria and
+                (parsed.report_completeness_score >= 65.0) and
+                (parsed.source_credibility_score >= 60.0) and
+                (parsed.confidence_score >= 75.0)
+            )
+            return {
+                "pass": is_pass,
+                "confidence": parsed.confidence_score,
+                "reason": f"{parsed.reason} (Assessment: {parsed.report_assessment})",
+                "detected": parsed.detected_objects
+            }
+        except Exception as e:
+            print(f"[VerifierService] Gemini Sensitive call error: {e}")
+            return None
+
     def verify_submission(
         self,
         task_instruction: str,
@@ -134,13 +205,47 @@ class VerifierService:
         file_path: str,
         device_lat: Optional[float],
         device_lon: Optional[float],
-        fixture_type: Optional[str] = None
+        fixture_type: Optional[str] = None,
+        task_category: str = "Civil Help",
+        investigation_letter: Optional[str] = None,
+        source_info: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Runs Tier 0 (Intake), Tier 1 (Geofence), Tier 2 (Gemini Vision) pipeline."""
+        """Runs Tier 0 (Intake), Tier 1 (Geofence), Tier 2 (Gemini Vision / Sensitive Dossier) pipeline."""
         file_hash = self.compute_sha256(file_path)
+        is_sensitive = (task_category or "").strip().lower() in ["sensitive", "sensitive task"]
 
         # Handle explicit judge presets first
         if fixture_type == "VALID":
+            if is_sensitive:
+                if not investigation_letter or len(investigation_letter.strip()) < 35:
+                    return {
+                        "file_hash": file_hash,
+                        "tier0_pass": False,
+                        "tier1_pass": True,
+                        "tier2_pass": False,
+                        "distance_meters": 28.0,
+                        "confidence": 0.0,
+                        "reason": "Rejected: Sensitive quests require a detailed investigation letter (minimum 35 characters) and verifiable source attribution to claim reward."
+                    }
+                if not source_info or len(source_info.strip()) < 4:
+                    return {
+                        "file_hash": file_hash,
+                        "tier0_pass": False,
+                        "tier1_pass": True,
+                        "tier2_pass": False,
+                        "distance_meters": 28.0,
+                        "confidence": 0.0,
+                        "reason": "Rejected: Sensitive quests require declaring a verifiable intelligence source."
+                    }
+                return {
+                    "file_hash": file_hash,
+                    "tier0_pass": True,
+                    "tier1_pass": True,
+                    "tier2_pass": True,
+                    "distance_meters": 28.0,
+                    "confidence": 95.0,
+                    "reason": "Sensitive Protocol Passed: Verified target photograph & validated field investigation letter with verifiable source attribution."
+                }
             return {
                 "file_hash": file_hash,
                 "tier0_pass": True,
@@ -151,6 +256,16 @@ class VerifierService:
                 "reason": "Matched physical scene: authentic daylight photo on-site."
             }
         elif fixture_type == "FAKE":
+            if is_sensitive:
+                return {
+                    "file_hash": file_hash,
+                    "tier0_pass": True,
+                    "tier1_pass": False,
+                    "tier2_pass": False,
+                    "distance_meters": 850.0,
+                    "confidence": 22.0,
+                    "reason": "Sensitive Protocol Failed: Incomplete investigation report, unverified source attribution, and location discrepancy."
+                }
             return {
                 "file_hash": file_hash,
                 "tier0_pass": True,
@@ -203,8 +318,38 @@ class VerifierService:
             tier1_pass = True
             distance = 45.0
 
-        # Tier 2: Real Gemini Multimodal Vision Model Check
-        gemini_res = self._call_gemini_vision(file_path, task_instruction, task_target_desc)
+        # Tier 2: Real Gemini Multimodal Model Check
+        if is_sensitive:
+            if not investigation_letter or len(investigation_letter.strip()) < 35:
+                return {
+                    "file_hash": file_hash,
+                    "tier0_pass": tier0_pass,
+                    "tier1_pass": tier1_pass,
+                    "tier2_pass": False,
+                    "distance_meters": round(distance, 1) if distance else None,
+                    "confidence": 18.0,
+                    "reason": "Sensitive Protocol Failed: An investigation letter (min 35 characters) detailing observations and origin is mandatory to claim this reward."
+                }
+            if not source_info or len(source_info.strip()) < 4:
+                return {
+                    "file_hash": file_hash,
+                    "tier0_pass": tier0_pass,
+                    "tier1_pass": tier1_pass,
+                    "tier2_pass": False,
+                    "distance_meters": round(distance, 1) if distance else None,
+                    "confidence": 25.0,
+                    "reason": "Sensitive Protocol Failed: You must declare the intelligence source (e.g. municipal records, direct witness interview, visual surveillance)."
+                }
+            gemini_res = self._call_gemini_sensitive_verification(
+                file_path=file_path,
+                instruction=task_instruction,
+                target_desc=task_target_desc,
+                investigation_letter=investigation_letter.strip(),
+                source_info=source_info.strip()
+            )
+        else:
+            gemini_res = self._call_gemini_vision(file_path, task_instruction, task_target_desc)
+
         if gemini_res is not None:
             tier2_pass = gemini_res["pass"]
             confidence = gemini_res["confidence"]
