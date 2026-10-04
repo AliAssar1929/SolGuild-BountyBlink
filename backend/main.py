@@ -187,14 +187,29 @@ def list_tasks(
         query = query.filter(Task.title.ilike(s) | Task.instruction.ilike(s) | Task.place_name.ilike(s) | Task.full_address.ilike(s))
 
     tasks = query.order_by(Task.created_at.desc()).all()
-    return tasks
+    result = []
+    for t in tasks:
+        td = {c.name: getattr(t, c.name) for c in t.__table__.columns}
+        if t.status == "CLAIMED" and t.active_claim_id:
+            c = db.query(Claim).filter(Claim.id == t.active_claim_id).first()
+            if c:
+                td["claim_expires_at"] = c.expires_at.isoformat() if c.expires_at else None
+                td["claimed_by"] = c.worker_address
+        result.append(td)
+    return result
 
 @app.get("/api/tasks/{task_id}")
 def get_task(task_id: str, db: Session = Depends(get_db)):
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    return task
+    td = {c.name: getattr(task, c.name) for c in task.__table__.columns}
+    if task.status == "CLAIMED" and task.active_claim_id:
+        c = db.query(Claim).filter(Claim.id == task.active_claim_id).first()
+        if c:
+            td["claim_expires_at"] = c.expires_at.isoformat() if c.expires_at else None
+            td["claimed_by"] = c.worker_address
+    return td
 
 @app.post("/api/tasks")
 async def create_task(req: CreateTaskRequest, db: Session = Depends(get_db)):
@@ -347,6 +362,17 @@ async def submit_evidence(
         explorer_url = url
         task.status = "PAID"
         task.payout_tx_sig = payout_sig
+        if task.active_claim_id:
+            c = db.query(Claim).filter(Claim.id == task.active_claim_id).first()
+            if c:
+                c.status = "RELEASED"
+        c_worker = db.query(Claim).filter(Claim.task_id == task.id, Claim.worker_address == worker_address).first()
+        if c_worker:
+            c_worker.status = "RELEASED"
+        worker_user = db.query(User).filter(User.address == worker_address).first()
+        if worker_user:
+            worker_user.total_earned_sol = (worker_user.total_earned_sol or 0.0) + task.reward_sol
+            worker_user.last_active = datetime.datetime.utcnow()
     else:
         task.status = "REJECTED"
 
@@ -424,6 +450,17 @@ async def approve_task_release(task_id: str, req: ApproveTaskRequest, db: Sessio
     success, sig, url = solana_service.transfer_sol(worker_target, task.reward_sol)
     task.status = "PAID"
     task.payout_tx_sig = sig
+    if task.active_claim_id:
+        c = db.query(Claim).filter(Claim.id == task.active_claim_id).first()
+        if c:
+            c.status = "RELEASED"
+    c_worker = db.query(Claim).filter(Claim.task_id == task_id, Claim.worker_address == worker_target).first()
+    if c_worker:
+        c_worker.status = "RELEASED"
+    worker_user = db.query(User).filter(User.address == worker_target).first()
+    if worker_user:
+        worker_user.total_earned_sol = (worker_user.total_earned_sol or 0.0) + task.reward_sol
+        worker_user.last_active = datetime.datetime.utcnow()
     db.commit()
 
     await manager.broadcast({
@@ -568,39 +605,41 @@ def get_user_profile(address: str, db: Session = Depends(get_db)):
     
     # Calculate live stats & authentic guild rank progression (F -> E -> D -> C -> B -> A -> S)
     posted_count = db.query(Task).filter(Task.poster_address == address).count()
-    completed_count = db.query(Claim).filter(Claim.worker_address == address, Claim.status == "RELEASED").count()
+    completed_claim_count = db.query(Claim).filter(Claim.worker_address == address, Claim.status == "RELEASED").count()
+    completed_sub_count = db.query(Submission).filter(Submission.worker_address == address, Submission.final_status == "PAID").count()
+    completed_count = max(completed_claim_count, completed_sub_count)
     paid_tasks_posted = db.query(Task).filter(Task.poster_address == address, Task.status == "PAID").count()
     balance = solana_service.get_balance(address)
 
-    # Experience points formula: 100 EXP per quest completed + 50 EXP per quest issued & paid
-    exp_points = (completed_count * 100) + (paid_tasks_posted * 50)
+    # Experience points formula: exactly 50 EXP per quest completed
+    exp_points = completed_count * 50
     
-    if exp_points >= 1500 or completed_count >= 15:
+    if exp_points >= 1500 or completed_count >= 30:
         rank_tier = "S"
         rank_title = "S-Rank Grandmaster Adventurer"
         next_tier = None
         next_exp_needed = 0
-    elif exp_points >= 800 or completed_count >= 8:
+    elif exp_points >= 800 or completed_count >= 16:
         rank_tier = "A"
         rank_title = "A-Rank Elite Adventurer"
         next_tier = "S"
         next_exp_needed = 1500 - exp_points
-    elif exp_points >= 450 or completed_count >= 5:
+    elif exp_points >= 450 or completed_count >= 9:
         rank_tier = "B"
         rank_title = "B-Rank Veteran Adventurer"
         next_tier = "A"
         next_exp_needed = 800 - exp_points
-    elif exp_points >= 250 or completed_count >= 3:
+    elif exp_points >= 250 or completed_count >= 5:
         rank_tier = "C"
         rank_title = "C-Rank Skilled Adventurer"
         next_tier = "B"
         next_exp_needed = 450 - exp_points
-    elif exp_points >= 100 or completed_count >= 1:
+    elif exp_points >= 100 or completed_count >= 2:
         rank_tier = "D"
         rank_title = "D-Rank Proven Adventurer"
         next_tier = "C"
         next_exp_needed = 250 - exp_points
-    elif exp_points >= 50 or posted_count >= 1:
+    elif exp_points >= 50 or completed_count >= 1:
         rank_tier = "E"
         rank_title = "E-Rank Apprentice Adventurer"
         next_tier = "D"

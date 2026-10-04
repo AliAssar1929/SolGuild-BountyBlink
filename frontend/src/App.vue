@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useWallet } from './composables/useWallet'
 import TaskRow from './components/TaskRow.vue'
 import StatusWord from './components/StatusWord.vue'
@@ -32,7 +32,8 @@ import {
   Wallet,
   Shield,
   Scroll,
-  FileText
+  FileText,
+  Clock
 } from 'lucide-vue-next'
 
 const { 
@@ -74,6 +75,8 @@ interface Task {
   fund_tx_sig?: string
   payout_tx_sig?: string
   refund_tx_sig?: string
+  claim_expires_at?: string
+  claimed_by?: string
 }
 
 // Navigation & Modals
@@ -124,6 +127,42 @@ const filterCity = ref('ALL')
 const isSubmitting = ref(false)
 const verificationResult = ref<any>(null)
 const currentStep = ref<number>(0)
+
+// Live Claim Countdown Timer
+const claimSecondsRemaining = ref(0)
+let claimTimerInterval: any = null
+
+const formattedClaimCountdown = computed(() => {
+  const m = Math.floor(claimSecondsRemaining.value / 60)
+  const s = claimSecondsRemaining.value % 60
+  return `${m}:${s < 10 ? '0' : ''}${s}`
+})
+
+const startClaimCountdown = (expiresAtStr?: string, minutesWindow = 15) => {
+  if (claimTimerInterval) clearInterval(claimTimerInterval)
+  
+  if (expiresAtStr) {
+    const diff = Math.floor((new Date(expiresAtStr).getTime() - Date.now()) / 1000)
+    claimSecondsRemaining.value = Math.max(0, diff)
+  } else {
+    claimSecondsRemaining.value = minutesWindow * 60
+  }
+
+  claimTimerInterval = setInterval(() => {
+    if (claimSecondsRemaining.value > 0) {
+      claimSecondsRemaining.value--
+    } else {
+      clearInterval(claimTimerInterval)
+      if (selectedTask.value && selectedTask.value.status === 'CLAIMED') {
+        fetchTasks()
+      }
+    }
+  }, 1000)
+}
+
+onUnmounted(() => {
+  if (claimTimerInterval) clearInterval(claimTimerInterval)
+})
 
 // Realtime WebSocket Listener: Auto-update on new data arrival without polling
 useGuildSocket((event: GuildEvent) => {
@@ -231,6 +270,12 @@ const selectTask = (task: Task) => {
   selectedTask.value = task
   verificationResult.value = null
   currentStep.value = 0
+  if (task.status === 'CLAIMED') {
+    startClaimCountdown(task.claim_expires_at, task.finish_window_minutes || 15)
+  } else {
+    if (claimTimerInterval) clearInterval(claimTimerInterval)
+    claimSecondsRemaining.value = 0
+  }
   navigateTo('feed', task.id)
 }
 
@@ -277,6 +322,9 @@ const claimTask = async () => {
     const data = await res.json()
     if (res.ok) {
       selectedTask.value.status = 'CLAIMED'
+      selectedTask.value.claimed_by = publicKey.value
+      selectedTask.value.claim_expires_at = data.claim_expires_at || data.claim?.expires_at
+      startClaimCountdown(selectedTask.value.claim_expires_at, selectedTask.value.finish_window_minutes || 15)
       fetchTasks()
     } else {
       if (res.status === 403) {
@@ -654,6 +702,31 @@ onMounted(async () => {
                   <div>You have {{ selectedTask.finish_window_minutes || 10 }} minutes to submit after claiming.</div>
                 </div>
 
+                <!-- Live Claim Countdown Badge -->
+                <div v-if="selectedTask.status === 'CLAIMED' && !verificationResult" class="p-3 rounded-[10px] bg-[#FFFBEB] border border-[#FDE68A] flex items-center justify-between text-[13px]">
+                  <div class="flex items-center gap-2 text-[#92400E] font-medium">
+                    <Clock class="w-4 h-4 text-[#B45309]" />
+                    <span>Submission Window Active</span>
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[11px] text-[#92400E] uppercase font-semibold">Remaining:</span>
+                    <span class="font-mono font-bold text-[14px]" :class="claimSecondsRemaining < 120 ? 'text-[#B42318] animate-pulse' : 'text-[#92400E]'">
+                      {{ formattedClaimCountdown }}
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Another Adventurer Active Reservation Notice -->
+                <div v-if="selectedTask.status === 'CLAIMED' && selectedTask.claimed_by && selectedTask.claimed_by !== publicKey" class="p-3 rounded-[10px] bg-[#FEF3F2] border border-[#FECDCA] text-[13px] text-[#B42318] space-y-1">
+                  <div class="font-semibold flex items-center gap-1.5">
+                    <AlertCircle class="w-4 h-4 text-[#B42318]" />
+                    <span>Reserved by Another Adventurer</span>
+                  </div>
+                  <p class="text-[12px] text-[#7A271A]">
+                    An operative is currently investigating this target. If they do not submit proof within {{ formattedClaimCountdown }}, this bounty automatically returns to the open guild board.
+                  </p>
+                </div>
+
                 <!-- Sensitive Protocol Banner -->
                 <div v-if="selectedTask.category === 'Sensitive'" class="p-3 rounded-[10px] bg-[#FFFBEB] border border-[#FDE68A] text-[13px] text-[#92400E] space-y-1">
                   <div class="font-semibold flex items-center gap-1.5">
@@ -711,6 +784,16 @@ onMounted(async () => {
                 class="w-full h-12 rounded-[12px] bg-[#FFD60A] hover:brightness-95 text-[#1A1A17] font-semibold text-[15px] transition-all flex items-center justify-center shadow-xs"
               >
                 Claim this task
+              </button>
+
+              <!-- Reserved by another operative button -->
+              <button 
+                v-else-if="selectedTask.status === 'CLAIMED' && selectedTask.claimed_by && selectedTask.claimed_by !== publicKey"
+                disabled
+                class="w-full h-12 rounded-[12px] bg-[#F7F5F0] border border-[#E3DFD6] text-[#5E5B53] font-medium text-[14px] flex items-center justify-center gap-2 cursor-not-allowed"
+              >
+                <Clock class="w-4 h-4 text-[#5E5B53]" />
+                <span>Reserved by another operative ({{ formattedClaimCountdown }})</span>
               </button>
 
               <!-- Sensitive Dossier Trigger Button -->

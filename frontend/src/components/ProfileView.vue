@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { CheckCircle2, AlertCircle, Check, Scroll, Shield } from 'lucide-vue-next'
 import { useSolPrice } from '../composables/useSolPrice'
 
@@ -22,14 +22,28 @@ const isSavingProfile = ref(false)
 const statusMessage = ref('')
 const errorMessage = ref('')
 
+// Watch props.userProfile to immediately reflect alias in form input and profile card
+watch(() => props.userProfile, (p) => {
+  if (p && p.name) {
+    nameInput.value = p.name
+  }
+}, { immediate: true, deep: true })
+
+// 0 EXP must mean strictly 0% yellow progress bar (no minimum fallback)
+const progressPercent = computed(() => {
+  const exp = props.userProfile?.exp || 0
+  if (exp <= 0) return 0
+  return Math.min(100, (exp / 1500) * 100)
+})
+
 // Pending Approvals & Activity stats
 const pendingApprovals = ref<any[]>([])
 const loadingApprovals = ref(false)
 const approvingId = ref<string | null>(null)
 
 onMounted(() => {
-  if (props.userProfile) {
-    nameInput.value = props.userProfile.name || ''
+  if (props.userProfile?.name) {
+    nameInput.value = props.userProfile.name
   }
   fetchPendingApprovals()
 })
@@ -93,17 +107,22 @@ const handleSaveProfile = async () => {
   isSavingProfile.value = true
   errorMessage.value = ''
   try {
+    const trimmed = nameInput.value.trim()
     const res = await fetch('/api/user/profile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         address: props.address,
-        name: nameInput.value
+        name: trimmed
       })
     })
     const data = await res.json()
     if (res.ok) {
       statusMessage.value = 'Adventurer handle updated successfully'
+      if (props.userProfile) {
+        props.userProfile.name = data.user?.name || trimmed
+      }
+      nameInput.value = data.user?.name || trimmed
       emit('profileUpdated')
       setTimeout(() => statusMessage.value = '', 3000)
     } else {
@@ -152,7 +171,7 @@ const handleSaveProfile = async () => {
             </div>
             <div>
               <div class="flex items-center gap-2">
-                <span class="font-bold text-[17px] text-[#1A1A17]">{{ nameInput || 'Anonymous Adventurer' }}</span>
+                <span class="font-bold text-[17px] text-[#1A1A17]">{{ userProfile?.name || nameInput || 'Anonymous Adventurer' }}</span>
                 <span class="px-2 py-0.5 rounded-full text-[11px] font-extrabold uppercase border" :class="rankBadgeColor">
                   {{ userProfile?.rank || 'F' }}-Rank
                 </span>
@@ -165,7 +184,7 @@ const handleSaveProfile = async () => {
           </span>
         </div>
 
-        <!-- Rank Progression Bar -->
+        <!-- Rank Progression Bar (Strictly 0% width at 0 EXP) -->
         <div class="space-y-1.5 p-3 bg-white rounded-[10px] border border-[#E3DFD6]">
           <div class="flex justify-between text-[12px] text-[#5E5B53]">
             <span>Rank Progression</span>
@@ -174,7 +193,7 @@ const handleSaveProfile = async () => {
           <div class="h-2 bg-[#F7F5F0] rounded-full overflow-hidden border border-[#E3DFD6]">
             <div 
               class="h-full bg-[#FFD60A] transition-all duration-500" 
-              :style="{ width: `${Math.min(100, Math.max(8, ((userProfile?.exp || 0) / 1500) * 100))}%` }"
+              :style="{ width: `${progressPercent}%` }"
             ></div>
           </div>
           <div class="flex justify-between text-[10px] text-[#5E5B53] font-mono pt-0.5">
@@ -217,23 +236,23 @@ const handleSaveProfile = async () => {
           </div>
           <div class="p-2.5 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
             <span class="font-bold text-[#1A1A17]">E-Rank &rarr; Apprentice (50 EXP)</span>
-            <p class="text-[#5E5B53]">Issued first quest bounty or completed beginner municipal requests.</p>
+            <p class="text-[#5E5B53]">Completed 1 quest (50 EXP) or settled first municipal bounty.</p>
           </div>
           <div class="p-2.5 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
             <span class="font-bold text-[#1A1A17]">D-Rank &rarr; Proven (100 EXP)</span>
-            <p class="text-[#5E5B53]">Verified on-site photo verifier pass and settled first on-chain escrow.</p>
+            <p class="text-[#5E5B53]">Completed 2 quests (100 EXP). Verified on-site photo verifier pass.</p>
           </div>
           <div class="p-2.5 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
             <span class="font-bold text-[#1A1A17]">C-Rank &rarr; Skilled (250 EXP)</span>
-            <p class="text-[#5E5B53]">3+ completed quests across multiple cities with zero fraudulent reports.</p>
+            <p class="text-[#5E5B53]">Completed 5 quests (250 EXP) across European hubs with zero fraudulent reports.</p>
           </div>
           <div class="p-2.5 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
             <span class="font-bold text-[#1A1A17]">B-Rank &rarr; Veteran (450 EXP)</span>
-            <p class="text-[#5E5B53]">5+ completed quests or 450 EXP. Eligible for Sensitive Task contracts.</p>
+            <p class="text-[#5E5B53]">Completed 9 quests (450 EXP). Authorized for Sensitive Task reconnaissance.</p>
           </div>
           <div class="p-2.5 bg-[#F7F5F0] rounded-[8px] space-y-0.5">
-            <span class="font-bold text-[#1A1A17]">A & S-Rank &rarr; Elite & Grandmaster</span>
-            <p class="text-[#5E5B53]">8+ and 15+ verified completions. Unrestricted guild master privileges.</p>
+            <span class="font-bold text-[#1A1A17]">A & S-Rank &rarr; Elite & Grandmaster (800 & 1500 EXP)</span>
+            <p class="text-[#5E5B53]">Completed 16 & 30 verified quests. Unrestricted guild master privileges.</p>
           </div>
         </div>
       </div>
