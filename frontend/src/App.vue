@@ -25,7 +25,17 @@ import {
   Wallet
 } from 'lucide-vue-next'
 
-const { publicKey, balance, initWallet, fetchFaucet } = useWallet()
+const { 
+  publicKey, 
+  balance, 
+  isConnecting, 
+  userProfile, 
+  isNewUser, 
+  initWallet, 
+  connectPhantom, 
+  fetchFaucet, 
+  disconnect 
+} = useWallet()
 
 interface Task {
   id: string
@@ -58,7 +68,6 @@ const currentTab = ref<'feed' | 'post' | 'activity'>('feed')
 const showDemoDrawer = ref(false)
 const showWalletModal = ref(false)
 const showLocationPrompt = ref(true)
-const activeWalletProvider = ref('demo')
 
 // Activity Tab Filter
 const activityTab = ref<'ALL' | 'POSTED' | 'WORKING' | 'COMPLETED'>('ALL')
@@ -246,14 +255,11 @@ const handleCreateTask = async (payload: any) => {
   }
 }
 
-const handleSelectWallet = (providerId: string) => {
-  activeWalletProvider.value = providerId
-  if (providerId === 'phantom' && (window as any).solana?.isPhantom) {
-    (window as any).solana.connect().then((resp: any) => {
-      publicKey.value = resp.publicKey.toString()
-    }).catch(console.error)
+const handleConnectPhantom = async () => {
+  const connected = await connectPhantom()
+  if (connected) {
+    showWalletModal.value = false
   }
-  showWalletModal.value = false
 }
 
 const filteredActivityTasks = computed(() => {
@@ -320,13 +326,24 @@ onMounted(() => {
           <span>Demo tools</span>
         </button>
 
+        <!-- Connect / Join / Wallet Chip -->
         <button 
+          v-if="!publicKey"
           @click="showWalletModal = true"
-          class="flex items-center gap-2 text-[13px] hover:bg-[#F7F5F0] px-2 py-1 rounded-[8px] transition-colors"
+          class="h-8 px-3.5 rounded-[10px] bg-[#FFD60A] hover:bg-[#F2CA00] text-[#1A1A17] text-[13px] font-semibold flex items-center gap-1.5 transition-transform active:scale-95 cursor-pointer shadow-xs"
         >
-          <Wallet class="w-3.5 h-3.5 text-[#5E5B53]" />
+          <Wallet class="w-3.5 h-3.5 text-[#1A1A17]" />
+          <span>Join / Connect</span>
+        </button>
+
+        <button 
+          v-else
+          @click="showWalletModal = true"
+          class="flex items-center gap-2 text-[13px] bg-[#F7F5F0] hover:bg-[#EAE6DC] px-2.5 py-1 rounded-[10px] border border-[#E3DFD6] transition-colors"
+        >
+          <span class="w-2 h-2 rounded-full bg-[#1E7B4F]"></span>
           <span class="font-mono text-[#5E5B53] hidden sm:inline">{{ publicKey.slice(0, 4) }}...{{ publicKey.slice(-4) }}</span>
-          <span class="font-semibold text-[#1A1A17]">{{ balance.toFixed(2) }} SOL</span>
+          <span class="font-semibold text-[#1A1A17]">{{ balance.toFixed(3) }} SOL</span>
         </button>
       </div>
 
@@ -776,10 +793,13 @@ onMounted(() => {
       :isOpen="showWalletModal"
       :currentAddress="publicKey"
       :balance="balance"
-      :connectedProvider="activeWalletProvider"
+      :isConnecting="isConnecting"
+      :isNewUser="isNewUser"
+      :userProfile="userProfile"
       @close="showWalletModal = false"
-      @selectWallet="handleSelectWallet"
-      @disconnect="publicKey = ''"
+      @connectPhantom="handleConnectPhantom"
+      @faucet="fetchFaucet"
+      @disconnect="disconnect"
     />
 
   </div>

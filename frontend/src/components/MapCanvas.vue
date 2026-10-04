@@ -29,9 +29,12 @@ let markers: maplibregl.Marker[] = []
 const initMap = () => {
   if (!mapContainer.value) return
 
-  // Using free OpenStreetMap raster tiles through MapLibre
+  // Using free OpenStreetMap raster tiles through MapLibre without default bouncing
   map = new maplibregl.Map({
     container: mapContainer.value,
+    attributionControl: false, // Prevents default maplibregl attribution control from mounting
+    dragRotate: false,
+    pitchWithRotate: false,
     style: {
       version: 8,
       sources: {
@@ -40,8 +43,7 @@ const initMap = () => {
           tiles: [
             'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
           ],
-          tileSize: 256,
-          attribution: '&copy; OpenStreetMap contributors'
+          tileSize: 256
         }
       },
       layers: [
@@ -58,7 +60,21 @@ const initMap = () => {
     zoom: 13
   })
 
+  // Immediate JS injection to purge any MapLibre / OpenStreetMap attribution DOM elements in 1ms
+  const purgeAttribution = () => {
+    const targets = document.querySelectorAll(
+      '.maplibregl-ctrl-attrib, details.maplibregl-ctrl-attrib, .maplibregl-compact, .maplibregl-compact-show'
+    )
+    targets.forEach(el => el.remove())
+  }
+  purgeAttribution()
+  const attribObserver = new MutationObserver(purgeAttribution)
+  if (mapContainer.value) {
+    attribObserver.observe(mapContainer.value, { childList: true, subtree: true })
+  }
+
   map.on('load', () => {
+    purgeAttribution()
     updateMarkers()
     drawGeofenceCircle()
   })
@@ -147,10 +163,12 @@ const drawGeofenceCircle = () => {
     }
   })
 
-  map.flyTo({
+  // Smooth easeTo without bouncing or zooming out-and-in
+  map.easeTo({
     center: [props.selectedTask.longitude, props.selectedTask.latitude],
     zoom: 14.5,
-    speed: 1.2
+    duration: 600,
+    essential: true
   })
 }
 

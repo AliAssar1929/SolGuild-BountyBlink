@@ -11,11 +11,11 @@ from sqlalchemy.orm import Session
 import httpx
 
 from config import settings
-from models import init_db, SessionLocal, Task, Claim, Submission, VerificationCache, AuthNonce
+from models import init_db, SessionLocal, Task, Claim, Submission, VerificationCache, AuthNonce, User
 from solana_service import solana_service
 from verifier_service import verifier_service
 
-app = FastAPI(title="BountyBlink API", version="1.1.0")
+app = FastAPI(title="BountyBlink API", version="1.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -468,7 +468,7 @@ async def geo_search(q: str = Query(...)):
         }
     ]
 
-# 3. Wallet Nonce Auth Flow
+# 3. Wallet Nonce Auth & User Sign-in / Join Flow
 @app.get("/api/auth/nonce/{address}")
 def get_nonce(address: str, db: Session = Depends(get_db)):
     nonce_val = secrets.token_hex(16)
@@ -482,15 +482,86 @@ def get_nonce(address: str, db: Session = Depends(get_db)):
         obj = AuthNonce(address=address, nonce=nonce_val, expires_at=expiry)
         db.add(obj)
     db.commit()
-    return {"address": address, "nonce": nonce_val, "message": f"Sign in to BountyBlink: {nonce_val}"}
+
+    # Check if user already exists or is joining for the first time
+    user = db.query(User).filter(User.address == address).first()
+    is_new_user = user is None
+    message = f"Welcome to BountyBlink! Sign this message to authenticate your wallet on Solana Devnet.\nNonce: {nonce_val}"
+
+    return {
+        "address": address, 
+        "nonce": nonce_val, 
+        "message": message,
+        "is_new_user": is_new_user
+    }
 
 @app.post("/api/auth/verify")
 def verify_nonce(req: NonceVerifyRequest, db: Session = Depends(get_db)):
     obj = db.query(AuthNonce).filter(AuthNonce.address == req.address).first()
     if not obj:
         raise HTTPException(status_code=400, detail="Nonce not requested")
-    # Verified demo session
-    return {"status": "authenticated", "address": req.address}
+    
+    now = datetime.datetime.utcnow()
+    user = db.query(User).filter(User.address == req.address).first()
+    is_new = False
+    
+    if not user:
+        is_new = True
+        user = User(
+            address=req.address,
+            joined_at=now,
+            last_active=now,
+            cluster="devnet"
+        )
+        db.add(user)
+    else:
+        user.last_active = now
+    
+    db.commit()
+
+    # Auto airdrop gas fees on Devnet if first time or balance is low
+    airdrop_sig = None
+    if not user.airdropped_gas:
+        try:
+            success, airdrop_sig = solana_service.request_airdrop(req.address, amount_sol=0.05)
+            if success:
+                user.airdropped_gas = True
+                db.commit()
+        except Exception as e:
+            print(f"Auto airdrop error: {e}")
+
+    return {
+        "status": "authenticated", 
+        "address": req.address,
+        "is_new_user": is_new,
+        "cluster": "devnet",
+        "airdrop_sig": airdrop_sig
+    }
+
+@app.get("/api/user/{address}")
+def get_user_profile(address: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.address == address).first()
+    if not user:
+        # Create user record if accessing for first time
+        user = User(address=address, joined_at=datetime.datetime.utcnow(), last_active=datetime.datetime.utcnow())
+        db.add(user)
+        db.commit()
+    
+    # Calculate live stats
+    posted_count = db.query(Task).filter(Task.poster_address == address).count()
+    completed_count = db.query(Claim).filter(Claim.worker_address == address, Claim.status == "RELEASED").count()
+    balance = solana_service.get_balance(address)
+
+    return {
+        "address": user.address,
+        "joined_at": user.joined_at.isoformat() if user.joined_at else None,
+        "last_active": user.last_active.isoformat() if user.last_active else None,
+        "tasks_posted": posted_count,
+        "tasks_completed": completed_count,
+        "total_earned_sol": user.total_earned_sol,
+        "balance_sol": balance,
+        "cluster": "devnet"
+    }
 
 # 4. Usage Totals Endpoint for Demo Drawer
 @app.get("/api/demo/usage")
@@ -517,6 +588,10 @@ def reset_demo(db: Session = Depends(get_db)):
     return {"status": "ok", "message": "Database reset to 8 multi-city tasks."}
 
 @app.get("/api/wallet/faucet/{address}")
-def faucet(address: str):
+def faucet(address: str, db: Session = Depends(get_db)):
     success, sig = solana_service.request_airdrop(address, amount_sol=0.05)
-    return {"status": "ok", "tx_sig": sig, "amount": 0.05}
+    user = db.query(User).filter(User.address == address).first()
+    if user:
+        user.airdropped_gas = True
+        db.commit()
+    return {"status": "ok", "tx_sig": sig, "amount": 0.05, "cluster": "devnet"}

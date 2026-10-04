@@ -57,7 +57,7 @@
   background-color: #FFFFFF;
 }
 
-/* Maplibre custom pin styling */
+/* Maplibre custom pin styling - strictly no transform transition to prevent zoom bouncing */
 .custom-map-pin {
   background: #FFFFFF;
   color: #1A1A17;
@@ -73,16 +73,28 @@
   align-items: center;
   gap: 4px;
   white-space: nowrap;
-  transition: all 0.15s ease-out;
+  user-select: none;
+  transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+  will-change: auto;
 }
 
 .custom-map-pin.selected {
   background: #FFD60A;
   border-color: #1A1A17;
   color: #1A1A17;
-  transform: scale(1.08);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.14);
   z-index: 10;
+}
+
+/* Hide attribution control instantly via CSS as well */
+.maplibregl-ctrl-attrib,
+details.maplibregl-ctrl-attrib,
+.maplibregl-compact,
+.maplibregl-compact-show {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 /* Hairline borders */

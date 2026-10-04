@@ -67,6 +67,18 @@ class Submission(Base):
     tokens_used = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
+class User(Base):
+    __tablename__ = "users"
+
+    address = Column(String(44), primary_key=True, index=True)
+    joined_at = Column(DateTime, default=datetime.datetime.utcnow)
+    last_active = Column(DateTime, default=datetime.datetime.utcnow)
+    tasks_posted = Column(Integer, default=0)
+    tasks_completed = Column(Integer, default=0)
+    total_earned_sol = Column(Float, default=0.0)
+    airdropped_gas = Column(Boolean, default=False)
+    cluster = Column(String(20), default="devnet")
+
 class VerificationCache(Base):
     __tablename__ = "verification_cache"
 
@@ -89,3 +101,4 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+
