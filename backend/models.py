@@ -11,14 +11,23 @@ class Task(Base):
 
     id = Column(String(36), primary_key=True, index=True)
     title = Column(String(120), nullable=False)
+    category = Column(String(50), default="Infrastructure")
     instruction = Column(Text, nullable=False)
     target_description = Column(Text, nullable=False)
+    forbidden_description = Column(Text, nullable=True) # what the photo must not show
+    place_name = Column(String(120), nullable=True)
+    full_address = Column(String(255), nullable=True)
+    city = Column(String(80), default="Berlin")
+    country = Column(String(80), default="Germany")
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     radius_meters = Column(Integer, default=150)
+    photos_required = Column(Integer, default=1)
+    finish_window_minutes = Column(Integer, default=10)
     reward_sol = Column(Float, default=0.01)
     poster_address = Column(String(44), nullable=False)
     status = Column(String(20), default="OPEN", index=True) # OPEN, CLAIMED, PAID, REJECTED, REFUNDED
+    reference_photo_url = Column(String(255), nullable=True)
     fund_tx_sig = Column(String(88), nullable=True)
     payout_tx_sig = Column(String(88), nullable=True)
     refund_tx_sig = Column(String(88), nullable=True)
@@ -55,7 +64,25 @@ class Submission(Base):
     vision_confidence = Column(Float, default=0.0)
     vision_reason = Column(Text, nullable=True)
     final_status = Column(String(20), default="REJECTED") # PAID, REJECTED
+    tokens_used = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class VerificationCache(Base):
+    __tablename__ = "verification_cache"
+
+    cache_key = Column(String(64), primary_key=True, index=True) # sha256(image_hash + task_id)
+    decision = Column(Boolean, nullable=False)
+    confidence = Column(Float, nullable=False)
+    reason = Column(Text, nullable=False)
+    tokens_used = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class AuthNonce(Base):
+    __tablename__ = "auth_nonces"
+
+    address = Column(String(44), primary_key=True)
+    nonce = Column(String(64), nullable=False)
+    expires_at = Column(DateTime, nullable=False)
 
 engine = create_engine(settings.DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

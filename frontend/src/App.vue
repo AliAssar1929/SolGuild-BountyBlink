@@ -9,6 +9,10 @@ import DemoToolsDrawer from './components/DemoToolsDrawer.vue'
 import MapCanvas from './components/MapCanvas.vue'
 import LandingPage from './components/LandingPage.vue'
 import TxLink from './components/TxLink.vue'
+import PostTaskForm from './components/PostTaskForm.vue'
+import TaskFilters from './components/TaskFilters.vue'
+import LocationPermissionCard from './components/LocationPermissionCard.vue'
+import WalletModal from './components/WalletModal.vue'
 
 import {
   ArrowLeft,
@@ -17,7 +21,8 @@ import {
   CheckCircle2,
   AlertCircle,
   FlaskConical,
-  RotateCcw
+  RotateCcw,
+  Wallet
 } from 'lucide-vue-next'
 
 const { publicKey, balance, initWallet, fetchFaucet } = useWallet()
@@ -25,57 +30,65 @@ const { publicKey, balance, initWallet, fetchFaucet } = useWallet()
 interface Task {
   id: string
   title: string
+  category?: string
   instruction: string
   target_description: string
+  forbidden_description?: string
+  place_name?: string
+  full_address?: string
+  city?: string
+  country?: string
   latitude: number
   longitude: number
+  radius_meters?: number
+  photos_required?: number
+  finish_window_minutes?: number
   reward_sol: number
   poster_address: string
   status: string
+  reference_photo_url?: string
   fund_tx_sig?: string
   payout_tx_sig?: string
   refund_tx_sig?: string
 }
 
-// Global View Navigation
+// Navigation & Modals
 const showLanding = ref(false)
 const currentTab = ref<'feed' | 'post' | 'activity'>('feed')
 const showDemoDrawer = ref(false)
+const showWalletModal = ref(false)
+const showLocationPrompt = ref(true)
+const activeWalletProvider = ref('demo')
 
-// Tasks & Search
+// Activity Tab Filter
+const activityTab = ref<'ALL' | 'POSTED' | 'WORKING' | 'COMPLETED'>('ALL')
+const activitySelectedTask = ref<Task | null>(null)
+
+// Tasks & Filters
 const tasks = ref<Task[]>([])
 const selectedTask = ref<Task | null>(null)
 const loading = ref(false)
+const submittingPost = ref(false)
 const searchQuery = ref('')
-const filter = ref<'ALL' | 'OPEN'>('ALL')
+const filterStatus = ref('ALL')
+const filterCategory = ref('ALL')
+const filterCity = ref('ALL')
 
 // Claim & Verification Flow
 const isSubmitting = ref(false)
 const verificationResult = ref<any>(null)
 const currentStep = ref<number>(0)
 
-// Post Task Form
-const postTitle = ref('')
-const postInstruction = ref('')
-const postTarget = ref('')
-const postLat = ref(52.5200)
-const postLon = ref(13.4050)
-const postCreatedResult = ref<any>(null)
-
-const filteredTasks = computed<Task[]>(() => {
-  return tasks.value.filter((t: Task) => {
-    const matches = t.title.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-                    t.instruction.toLowerCase().includes(searchQuery.value.toLowerCase())
-    if (!matches) return false
-    if (filter.value === 'OPEN') return t.status === 'OPEN'
-    return true
-  })
-})
-
 const fetchTasks = async () => {
   loading.value = true
   try {
-    const res = await fetch('/api/tasks')
+    let url = '/api/tasks?'
+    if (filterStatus.value !== 'ALL') url += `status=${filterStatus.value}&`
+    if (filterCategory.value !== 'ALL') url += `category=${filterCategory.value}&`
+    if (filterCity.value !== 'ALL') url += `city=${filterCity.value}&`
+    if (searchQuery.value) url += `search=${encodeURIComponent(searchQuery.value)}&`
+
+    const res = await fetch(url)
     tasks.value = await res.json()
     if (!selectedTask.value && tasks.value.length > 0) {
       selectedTask.value = tasks.value[0]
@@ -91,6 +104,26 @@ const selectTask = (task: Task) => {
   selectedTask.value = task
   verificationResult.value = null
   currentStep.value = 0
+}
+
+const handleUseLocation = () => {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      () => {
+        showLocationPrompt.value = false
+        filterCity.value = 'Berlin'
+        fetchTasks()
+      },
+      () => {
+        showLocationPrompt.value = false
+      }
+    )
+  }
+}
+
+const handleSelectCity = (city: string) => {
+  filterCity.value = city
+  fetchTasks()
 }
 
 const claimTask = async () => {
@@ -196,39 +229,40 @@ const resetDemo = async () => {
   }
 }
 
-const applyPreset = (title: string, inst: string, target: string) => {
-  postTitle.value = title
-  postInstruction.value = inst
-  postTarget.value = target
-}
-
-const createBounty = async () => {
-  if (!postTitle.value || !postInstruction.value) return
-  loading.value = true
+const handleCreateTask = async (payload: any) => {
+  submittingPost.value = true
   try {
-    const res = await fetch('/api/tasks', {
+    await fetch('/api/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: postTitle.value,
-        instruction: postInstruction.value,
-        target_description: postTarget.value || postTitle.value,
-        latitude: postLat.value,
-        longitude: postLon.value,
-        reward_sol: 0.01,
-        poster_address: publicKey.value
-      })
+      body: JSON.stringify(payload)
     })
-    const data = await res.json()
-    postCreatedResult.value = data
     fetchTasks()
     currentTab.value = 'feed'
   } catch (e) {
     console.error(e)
   } finally {
-    loading.value = false
+    submittingPost.value = false
   }
 }
+
+const handleSelectWallet = (providerId: string) => {
+  activeWalletProvider.value = providerId
+  if (providerId === 'phantom' && (window as any).solana?.isPhantom) {
+    (window as any).solana.connect().then((resp: any) => {
+      publicKey.value = resp.publicKey.toString()
+    }).catch(console.error)
+  }
+  showWalletModal.value = false
+}
+
+const filteredActivityTasks = computed(() => {
+  if (activityTab.value === 'ALL') return tasks.value
+  if (activityTab.value === 'POSTED') return tasks.value.filter(t => t.poster_address === publicKey.value)
+  if (activityTab.value === 'WORKING') return tasks.value.filter(t => t.status === 'CLAIMED')
+  if (activityTab.value === 'COMPLETED') return tasks.value.filter(t => t.status === 'PAID' || t.status === 'REFUNDED')
+  return tasks.value
+})
 
 onMounted(() => {
   initWallet()
@@ -237,12 +271,11 @@ onMounted(() => {
 </script>
 
 <template>
-  <!-- Landing page toggle -->
   <LandingPage v-if="showLanding" @startApp="showLanding = false" />
 
   <div v-else class="h-screen w-screen flex flex-col bg-[#F7F5F0] text-[#1A1A17] overflow-hidden">
     
-    <!-- TOP BAR (Desktop and Mobile) -->
+    <!-- TOP BAR (SHARED FULL-WIDTH SHELL) -->
     <header class="h-14 bg-white border-b border-[#E3DFD6] px-4 md:px-6 flex items-center justify-between shrink-0 z-20">
       
       <!-- Brand & Tabs -->
@@ -277,7 +310,7 @@ onMounted(() => {
         </nav>
       </div>
 
-      <!-- Controls: Demo tools & Wallet chip -->
+      <!-- Controls: Demo tools & Wallet Chip -->
       <div class="flex items-center gap-3">
         <button 
           @click="showDemoDrawer = true"
@@ -287,28 +320,31 @@ onMounted(() => {
           <span>Demo tools</span>
         </button>
 
-        <div class="flex items-center gap-2 text-[13px]">
+        <button 
+          @click="showWalletModal = true"
+          class="flex items-center gap-2 text-[13px] hover:bg-[#F7F5F0] px-2 py-1 rounded-[8px] transition-colors"
+        >
+          <Wallet class="w-3.5 h-3.5 text-[#5E5B53]" />
           <span class="font-mono text-[#5E5B53] hidden sm:inline">{{ publicKey.slice(0, 4) }}...{{ publicKey.slice(-4) }}</span>
           <span class="font-semibold text-[#1A1A17]">{{ balance.toFixed(2) }} SOL</span>
-        </div>
+        </button>
       </div>
 
     </header>
 
-    <!-- MAIN BODY -->
+    <!-- MAIN BODY CONTENT AREA (EDGE-TO-EDGE FULL WIDTH) -->
     <div class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
       
       <!-- ================= TAB 1: FIND TASKS (MAP-FIRST APP) ================= -->
       <template v-if="currentTab === 'feed'">
         
-        <!-- 400px Left Panel (Desktop List & Detail Replacement) -->
+        <!-- 400px Left Panel (Single Replacement Pattern) -->
         <section class="w-full md:w-[400px] h-1/2 md:h-full bg-white md:border-r border-[#E3DFD6] flex flex-col shrink-0 z-10 shadow-xs order-2 md:order-1">
           
           <!-- DETAIL STATE IN LEFT PANEL -->
           <div v-if="selectedTask" class="h-full flex flex-col justify-between overflow-y-auto text-left">
             
             <div class="p-5 space-y-4">
-              <!-- Back button -->
               <button 
                 @click="selectedTask = null"
                 class="flex items-center gap-1 text-[13px] text-[#5E5B53] hover:text-[#1A1A17] font-medium"
@@ -317,8 +353,8 @@ onMounted(() => {
                 <span>All tasks</span>
               </button>
 
-              <!-- Task Title & Money line -->
               <div class="space-y-1">
+                <span class="text-[12px] font-semibold text-[#5E5B53] uppercase">{{ selectedTask.category || 'General' }}</span>
                 <h1 class="text-[20px] font-semibold text-[#1A1A17] leading-tight">
                   {{ selectedTask.title }}
                 </h1>
@@ -326,7 +362,7 @@ onMounted(() => {
               </div>
 
               <!-- What to do & What photo should show -->
-              <div class="space-y-3 pt-2 text-[15px] leading-relaxed">
+              <div class="space-y-3 pt-1 text-[15px] leading-relaxed">
                 <div>
                   <h4 class="font-medium text-[#1A1A17] text-[13px]">What to do</h4>
                   <p class="text-[#5E5B53] text-[14px] mt-0.5">{{ selectedTask.instruction }}</p>
@@ -337,13 +373,18 @@ onMounted(() => {
                   <p class="text-[#5E5B53] text-[14px] mt-0.5">{{ selectedTask.target_description }}</p>
                 </div>
 
+                <div v-if="selectedTask.forbidden_description">
+                  <h4 class="font-medium text-[#B42318] text-[13px]">What the photo must not show</h4>
+                  <p class="text-[#5E5B53] text-[14px] mt-0.5">{{ selectedTask.forbidden_description }}</p>
+                </div>
+
                 <div class="pt-2 border-t border-[#E3DFD6] text-[13px] text-[#5E5B53] space-y-1">
-                  <div>Take the photo within 150 m of the pin.</div>
-                  <div>You have 10 minutes to submit after claiming.</div>
+                  <div>Take the photo within {{ selectedTask.radius_meters || 150 }} m of the pin.</div>
+                  <div>You have {{ selectedTask.finish_window_minutes || 10 }} minutes to submit after claiming.</div>
                 </div>
               </div>
 
-              <!-- Checking steps when submitted -->
+              <!-- Live Verification checking steps -->
               <div v-if="isSubmitting || verificationResult" class="pt-3 border-t border-[#E3DFD6]">
                 <h4 class="font-medium text-[#1A1A17] text-[13px] mb-2">Verification</h4>
                 <VerificationSteps 
@@ -354,7 +395,7 @@ onMounted(() => {
                 />
               </div>
 
-              <!-- Result verdict -->
+              <!-- Result verdict box -->
               <div v-if="verificationResult" class="pt-2">
                 <div 
                   class="p-3.5 rounded-[12px] text-[14px] space-y-1.5"
@@ -382,8 +423,6 @@ onMounted(() => {
 
             <!-- Sticky Bottom Action Button -->
             <div class="p-4 border-t border-[#E3DFD6] bg-white sticky bottom-0">
-              
-              <!-- Claim Button -->
               <button 
                 v-if="selectedTask.status === 'OPEN'"
                 @click="claimTask"
@@ -392,7 +431,6 @@ onMounted(() => {
                 Claim this task
               </button>
 
-              <!-- Upload / Snap Button -->
               <label 
                 v-else-if="selectedTask.status === 'CLAIMED' && !isSubmitting && !verificationResult"
                 class="w-full h-12 rounded-[12px] bg-[#FFD60A] hover:brightness-95 text-[#1A1A17] font-semibold text-[15px] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
@@ -402,7 +440,6 @@ onMounted(() => {
                 <input type="file" accept="image/*" capture="environment" @change="handleFileUpload" class="hidden" />
               </label>
 
-              <!-- Reset / Pick another -->
               <button 
                 v-else-if="verificationResult"
                 @click="selectedTask = null"
@@ -410,7 +447,6 @@ onMounted(() => {
               >
                 Find another task
               </button>
-
             </div>
 
           </div>
@@ -418,46 +454,53 @@ onMounted(() => {
           <!-- LIST STATE IN LEFT PANEL -->
           <div v-else class="h-full flex flex-col overflow-hidden text-left">
             
-            <!-- Search & Filters -->
             <div class="p-4 border-b border-[#E3DFD6] space-y-3 shrink-0">
               <h2 class="text-[17px] font-semibold text-[#1A1A17]">Tasks near you</h2>
               
+              <!-- Location Permission Card -->
+              <LocationPermissionCard 
+                :show="showLocationPrompt"
+                :activeCity="filterCity"
+                @useLocation="handleUseLocation"
+                @selectCity="handleSelectCity"
+                @dismiss="showLocationPrompt = false"
+              />
+
+              <!-- Search -->
               <div class="relative">
                 <Search class="w-4 h-4 text-[#5E5B53] absolute left-3 top-2.5" />
                 <input 
                   v-model="searchQuery"
-                  placeholder="Search tasks..." 
-                  class="w-full pl-9 pr-3 py-1.5 text-[15px] bg-[#F7F5F0] border border-[#E3DFD6] rounded-[8px] text-[#1A1A17] placeholder-[#5E5B53] focus:outline-none focus:border-[#1A1A17]"
+                  @input="fetchTasks"
+                  placeholder="Search title, place, address..." 
+                  class="w-full pl-9 pr-3 py-1.5 text-[14px] bg-[#F7F5F0] border border-[#E3DFD6] rounded-[8px] text-[#1A1A17] placeholder-[#5E5B53] focus:outline-none focus:border-[#1A1A17]"
                 />
               </div>
 
-              <div class="flex items-center gap-2 text-[13px]">
-                <button 
-                  @click="filter = 'ALL'"
-                  class="px-2.5 py-1 rounded-[6px] font-medium"
-                  :class="filter === 'ALL' ? 'bg-[#1A1A17] text-white' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
-                >
-                  All ({{ tasks.length }})
-                </button>
-                <button 
-                  @click="filter = 'OPEN'"
-                  class="px-2.5 py-1 rounded-[6px] font-medium"
-                  :class="filter === 'OPEN' ? 'bg-[#1A1A17] text-white' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
-                >
-                  Open only
-                </button>
-              </div>
+              <!-- Filter Bar (Categories, Cities, Status) -->
+              <TaskFilters 
+                v-model:status="filterStatus"
+                v-model:category="filterCategory"
+                v-model:city="filterCity"
+                @update:status="fetchTasks"
+                @update:category="fetchTasks"
+                @update:city="fetchTasks"
+              />
             </div>
 
             <!-- List rows -->
             <div class="flex-1 overflow-y-auto divide-y divide-[#E3DFD6]">
               <TaskRow 
-                v-for="task in (filteredTasks as any[])" 
+                v-for="task in (tasks as any[])" 
                 :key="task.id"
                 :task="task"
                 :isSelected="Boolean(selectedTask && (selectedTask as any).id === task.id)"
                 @select="selectTask(task)"
               />
+
+              <div v-if="tasks.length === 0" class="p-8 text-center text-[#5E5B53] text-[14px]">
+                No tasks match your filters. Try picking another city or resetting filters.
+              </div>
             </div>
 
           </div>
@@ -475,100 +518,108 @@ onMounted(() => {
 
       </template>
 
-      <!-- ================= TAB 2: POST A TASK ================= -->
-      <section v-else-if="currentTab === 'post'" class="flex-1 p-6 md:p-12 overflow-y-auto flex justify-center bg-[#F7F5F0]">
+      <!-- ================= TAB 2: POST A TASK (FULL-WIDTH 60/40 LIVE PREVIEW) ================= -->
+      <section v-else-if="currentTab === 'post'" class="flex-1 p-6 md:p-8 overflow-y-auto flex justify-center bg-[#F7F5F0]">
         
-        <div class="w-full max-w-lg bg-white p-6 md:p-8 rounded-[16px] border border-[#E3DFD6] shadow-xs space-y-6 text-left">
+        <div class="w-full max-w-6xl grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
           
-          <div class="border-b border-[#E3DFD6] pb-3">
-            <h2 class="text-[20px] font-bold text-[#1A1A17]">Post a task</h2>
-            <p class="text-[14px] text-[#5E5B53]">Deposit 0.01 SOL into escrow. Payout releases upon photo verification.</p>
+          <!-- Left 60%: Sectioned Form -->
+          <div class="md:col-span-7">
+            <PostTaskForm 
+              :userAddress="publicKey"
+              :submitting="submittingPost"
+              @createTask="handleCreateTask"
+            />
           </div>
 
-          <!-- Quick presets -->
-          <div class="space-y-2">
-            <label class="text-[13px] font-medium text-[#5E5B53]">Preset tasks</label>
-            <div class="grid grid-cols-2 gap-2">
-              <button 
-                @click="applyPreset('EV Charger Status Check', 'Check if charger #3 is working.', 'Operational screen, intact cable connector')"
-                class="p-2.5 text-left rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] hover:border-[#1A1A17] text-[13px]"
-              >
-                EV charger status
-              </button>
-              <button 
-                @click="applyPreset('Coffee Shop Hours Check', 'Photograph the opening hours chalkboard.', 'Chalkboard sign with clear hours')"
-                class="p-2.5 text-left rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] hover:border-[#1A1A17] text-[13px]"
-              >
-                Shop opening hours
-              </button>
-            </div>
-          </div>
+          <!-- Right 40%: Sticky Live Preview -->
+          <div class="md:col-span-5 sticky top-6 space-y-4 text-left">
+            <div class="bg-white p-5 rounded-[16px] border border-[#E3DFD6] shadow-xs space-y-3">
+              <span class="text-[12px] font-semibold text-[#5E5B53] uppercase">Live task preview</span>
+              
+              <div class="h-44 bg-[#F7F5F0] rounded-[10px] border border-[#E3DFD6] overflow-hidden">
+                <MapCanvas 
+                  :tasks="tasks" 
+                  :selectedTask="selectedTask" 
+                />
+              </div>
 
-          <!-- Inputs -->
-          <div class="space-y-4 text-[15px]">
-            <div>
-              <label class="block text-[13px] font-medium text-[#5E5B53] mb-1">Task title</label>
-              <input 
-                v-model="postTitle"
-                placeholder="e.g. Is the EV charger at Alexanderplatz working?"
-                class="w-full px-3.5 py-2.5 rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] focus:outline-none focus:border-[#1A1A17]"
-              />
+              <div class="p-3 bg-[#F7F5F0] rounded-[8px] space-y-1 text-[13px]">
+                <div class="font-semibold text-[#1A1A17]">Verification rules</div>
+                <div class="text-[#5E5B53]">Radius boundary: 150 meters &middot; Multimodal vision inspection enabled.</div>
+              </div>
             </div>
-
-            <div>
-              <label class="block text-[13px] font-medium text-[#5E5B53] mb-1">What to do</label>
-              <textarea 
-                v-model="postInstruction"
-                rows="2"
-                placeholder="Specify the photo perspective..."
-                class="w-full px-3.5 py-2.5 rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] focus:outline-none focus:border-[#1A1A17]"
-              ></textarea>
-            </div>
-
-            <div>
-              <label class="block text-[13px] font-medium text-[#5E5B53] mb-1">What the photo should show</label>
-              <input 
-                v-model="postTarget"
-                placeholder="e.g. Green operational display, undamaged cable"
-                class="w-full px-3.5 py-2.5 rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] focus:outline-none focus:border-[#1A1A17]"
-              />
-            </div>
-
-            <div class="p-3 bg-[#F7F5F0] rounded-[8px] flex justify-between items-center text-[15px]">
-              <span class="text-[#5E5B53]">Deposit amount</span>
-              <span class="font-bold text-[#1A1A17]">0.01 SOL</span>
-            </div>
-
-            <button 
-              @click="createBounty"
-              class="w-full h-12 rounded-[12px] bg-[#FFD60A] text-[#1A1A17] font-semibold text-[15px] hover:brightness-95 transition-all shadow-xs"
-            >
-              Fund and publish task
-            </button>
           </div>
 
         </div>
 
       </section>
 
-      <!-- ================= TAB 3: MY ACTIVITY ================= -->
-      <section v-else-if="currentTab === 'activity'" class="flex-1 p-6 md:p-12 overflow-y-auto flex justify-center bg-[#F7F5F0]">
+      <!-- ================= TAB 3: MY ACTIVITY (FULL-WIDTH LIST + DETAIL DRAWER) ================= -->
+      <section v-else-if="currentTab === 'activity'" class="flex-1 p-6 md:p-8 overflow-y-auto flex justify-center bg-[#F7F5F0]">
         
-        <div class="w-full max-w-xl bg-white p-6 md:p-8 rounded-[16px] border border-[#E3DFD6] shadow-xs space-y-4 text-left">
+        <div class="w-full max-w-5xl bg-white p-6 md:p-8 rounded-[16px] border border-[#E3DFD6] shadow-xs space-y-5 text-left">
           
-          <div class="flex justify-between items-center border-b border-[#E3DFD6] pb-3">
-            <h2 class="text-[20px] font-bold text-[#1A1A17]">My activity</h2>
-            <button @click="resetDemo" class="text-[13px] text-[#5E5B53] hover:text-[#1A1A17] flex items-center gap-1">
+          <div class="flex justify-between items-center border-b border-[#E3DFD6] pb-4">
+            <div>
+              <h2 class="text-[20px] font-bold text-[#1A1A17]">My activity</h2>
+              <p class="text-[13px] text-[#5E5B53]">Audit on-chain escrow releases and refunds</p>
+            </div>
+            <button @click="resetDemo" class="text-[13px] text-[#5E5B53] hover:text-[#1A1A17] flex items-center gap-1 font-medium">
               <RotateCcw class="w-3.5 h-3.5" />
               <span>Reset</span>
             </button>
           </div>
 
+          <!-- Sub-tabs: Posted, Working, Completed -->
+          <div class="flex items-center gap-2 border-b border-[#E3DFD6] pb-3 text-[13px]">
+            <button 
+              @click="activityTab = 'ALL'"
+              class="px-3 py-1.5 rounded-[8px] font-medium transition-colors"
+              :class="activityTab === 'ALL' ? 'bg-[#1A1A17] text-white' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
+            >
+              All ({{ tasks.length }})
+            </button>
+            <button 
+              @click="activityTab = 'POSTED'"
+              class="px-3 py-1.5 rounded-[8px] font-medium transition-colors"
+              :class="activityTab === 'POSTED' ? 'bg-[#1A1A17] text-white' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
+            >
+              Posted by me
+            </button>
+            <button 
+              @click="activityTab = 'WORKING'"
+              class="px-3 py-1.5 rounded-[8px] font-medium transition-colors"
+              :class="activityTab === 'WORKING' ? 'bg-[#1A1A17] text-white' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
+            >
+              In progress
+            </button>
+            <button 
+              @click="activityTab = 'COMPLETED'"
+              class="px-3 py-1.5 rounded-[8px] font-medium transition-colors"
+              :class="activityTab === 'COMPLETED' ? 'bg-[#1A1A17] text-white' : 'text-[#5E5B53] hover:text-[#1A1A17]'"
+            >
+              Completed
+            </button>
+          </div>
+
+          <!-- Activity Rows -->
           <div class="divide-y divide-[#E3DFD6] text-[15px]">
-            <div v-for="t in (tasks as Task[])" :key="t.id" class="py-3.5 flex justify-between items-center">
+            <div 
+              v-for="t in filteredActivityTasks" 
+              :key="t.id" 
+              @click="activitySelectedTask = t"
+              class="py-3.5 flex justify-between items-center cursor-pointer hover:bg-[#F7F5F0] px-3 rounded-[8px] transition-colors"
+            >
               <div>
                 <h4 class="font-medium text-[#1A1A17]">{{ t.title }}</h4>
-                <span class="text-[13px] text-[#5E5B53]">0.01 SOL</span>
+                <div class="flex items-center gap-2 text-[13px] text-[#5E5B53]">
+                  <span>{{ t.category || 'General' }}</span>
+                  <span>&middot;</span>
+                  <span>{{ t.city || 'Berlin' }}</span>
+                  <span>&middot;</span>
+                  <span class="font-semibold text-[#1A1A17]">{{ t.reward_sol.toFixed(2) }} SOL</span>
+                </div>
               </div>
               <div class="text-right space-y-1">
                 <StatusWord :status="t.status" />
@@ -612,13 +663,23 @@ onMounted(() => {
       </button>
     </nav>
 
-    <!-- Demo Tools Drawer -->
+    <!-- Modals & Drawers -->
     <DemoToolsDrawer 
       :isOpen="showDemoDrawer" 
       @close="showDemoDrawer = false" 
       @submitFixture="submitEvidence" 
       @reset="resetDemo"
       @faucet="fetchFaucet"
+    />
+
+    <WalletModal 
+      :isOpen="showWalletModal"
+      :currentAddress="publicKey"
+      :balance="balance"
+      :connectedProvider="activeWalletProvider"
+      @close="showWalletModal = false"
+      @selectWallet="handleSelectWallet"
+      @disconnect="publicKey = ''"
     />
 
   </div>
