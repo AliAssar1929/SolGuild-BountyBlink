@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SolGuild (BountyBlink) — Demo Video</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: #0D0E12;
+      color: #F7F5F0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px 16px;
+    }
+    .card {
+      width: 100%;
+      max-width: 900px;
+      background: #16181F;
+      border: 1px solid #282C37;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+      text-align: center;
+    }
+    .badge {
+      display: inline-block;
+      background: #FFD60A;
+      color: #1A1A17;
+      font-weight: 800;
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-size: 24px;
+      font-weight: 800;
+      color: #FFFFFF;
+      margin-bottom: 6px;
+      letter-spacing: -0.02em;
+    }
+    p {
+      color: #9CA3AF;
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+    .video-container {
+      position: relative;
+      width: 100%;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #000000;
+      border: 1px solid #2D3748;
+    }
+    video {
+      width: 100%;
+      height: auto;
+      display: block;
+      max-height: 70vh;
+    }
+    .btn-row {
+      margin-top: 24px;
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 12px 24px;
+      background: #FFD60A;
+      color: #1A1A17;
+      font-weight: 700;
+      font-size: 14px;
+      border-radius: 10px;
+      text-decoration: none;
+      transition: transform 0.15s, opacity 0.15s;
+    }
+    .btn-primary:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      padding: 12px 20px;
+      background: #222530;
+      color: #E5E7EB;
+      font-weight: 600;
+      font-size: 14px;
+      border-radius: 10px;
+      text-decoration: none;
+      border: 1px solid #374151;
+    }
+    .btn-secondary:hover {
+      background: #2D3240;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <span class="badge">Live Demo Pitch</span>
+    <h1>⚔️ SolGuild (BountyBlink)</h1>
+    <p>Real-World Adventurer Guild · Trustless Solana Escrow · Gemini AI Physical Verification</p>
+    
+    <div class="video-container">
+      <video controls autoplay muted playsinline preload="auto">
+        <source src="/demo.mp4" type="video/mp4">
+        Your browser does not support HTML5 video playback.
+      </video>
+    </div>
+
+    <div class="btn-row">
+      <a href="/" class="btn-primary">Enter Live Guild Board →</a>
+      <a href="/demo.mp4" target="_blank" class="btn-secondary">Open Raw Video (.mp4)</a>
+    </div>
+  </div>
+</body>
+</html>
