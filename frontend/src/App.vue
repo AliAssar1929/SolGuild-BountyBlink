@@ -7,7 +7,6 @@ import RewardLine from './components/RewardLine.vue'
 import VerificationSteps from './components/VerificationSteps.vue'
 import DemoToolsDrawer from './components/DemoToolsDrawer.vue'
 import MapCanvas from './components/MapCanvas.vue'
-import LandingPage from './components/LandingPage.vue'
 import TxLink from './components/TxLink.vue'
 import PostTaskForm from './components/PostTaskForm.vue'
 import TaskFilters from './components/TaskFilters.vue'
@@ -215,9 +214,14 @@ const syncRouteFromPath = () => {
   const parts = cleanPath.split('/')
   const section = parts[0]
 
-  if (!section || section === 'landing') {
-    showLanding.value = true
+  // Never show landing — route / directly to /quests
+  if (!section || section === 'landing' || section === '') {
+    showLanding.value = false
+    currentTab.value = 'feed'
     selectedTask.value = null
+    if (window.location.pathname === '/' || window.location.pathname === '') {
+      window.history.replaceState({}, '', '/quests')
+    }
   } else if (section === 'post' || section === 'issue') {
     showLanding.value = false
     currentTab.value = 'post'
@@ -248,14 +252,17 @@ const syncRouteFromPath = () => {
     showLanding.value = false
     currentTab.value = 'feed'
   } else {
-    showLanding.value = true
+    // Fallback: show feed
+    showLanding.value = false
+    currentTab.value = 'feed'
   }
 }
 
 const navigateToLanding = () => {
-  showLanding.value = true
+  // Landing page disabled — navigate to quest feed instead
+  currentTab.value = 'feed'
   selectedTask.value = null
-  window.history.pushState({}, '', '/')
+  window.history.pushState({}, '', '/quests')
 }
 
 const navigateTo = (tab: 'feed' | 'post' | 'activity' | 'profile', taskId?: string) => {
@@ -603,21 +610,14 @@ onMounted(async () => {
 </script>
 
 <template>
-  <LandingPage 
-    v-if="showLanding" 
-    @startApp="navigateTo('feed')" 
-    @openPostQuest="navigateTo('post')" 
-  />
-
-  <div v-else class="h-dvh w-full flex flex-col bg-[#F7F5F0] text-[#1A1A17] overflow-hidden selection:bg-[#FFD60A] selection:text-[#1A1A17]">
+  <div class="h-dvh w-full flex flex-col bg-[#F7F5F0] text-[#1A1A17] overflow-hidden selection:bg-[#FFD60A] selection:text-[#1A1A17]">
     
     <!-- TOP BAR (SHARED FULL-WIDTH SHELL) -->
     <header class="h-14 bg-white border-b border-[#E3DFD6] px-4 md:px-6 flex items-center justify-between shrink-0 z-20">
       
       <!-- Brand & Tabs -->
       <div class="flex items-center gap-6">
-        <div class="flex items-center gap-2.5 cursor-pointer select-none hover:opacity-85 transition-opacity" @click="navigateToLanding">
-          <img src="/guild-logo.jpg" alt="SolGuild Shield" class="w-7 h-7 rounded-md border border-black shadow-[1.5px_1.5px_0px_#1A1A17] object-cover" />
+        <div class="flex items-center gap-2 cursor-pointer select-none hover:opacity-80 transition-opacity" @click="navigateToLanding">
           <span class="font-bold text-[17px] tracking-tight">SolGuild</span>
           <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#FFD60A] text-[#1A1A17] border border-black shadow-[1px_1px_0px_#1A1A17]">Devnet</span>
         </div>

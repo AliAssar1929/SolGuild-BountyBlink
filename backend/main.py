@@ -861,12 +861,22 @@ def send_raw_transaction(req: RawTxRequest):
 
 @app.get("/api/wallet/faucet/{address}")
 def faucet(address: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.address == address).first()
+    # One-time-only faucet: if already airdropped, skip to avoid draining escrow vault
+    if user and user.airdropped_gas:
+        return {
+            "status": "already_airdropped",
+            "message": "Devnet gas already issued to this wallet.",
+            "amount": 0.0,
+            "cluster": "devnet"
+        }
     try:
         success, sig, explorer_url = solana_service.request_airdrop(address, amount_sol=0.05)
-        user = db.query(User).filter(User.address == address).first()
-        if user:
-            user.airdropped_gas = True
-            db.commit()
+        if not user:
+            user = User(address=address, joined_at=datetime.datetime.utcnow(), last_active=datetime.datetime.utcnow())
+            db.add(user)
+        user.airdropped_gas = True
+        db.commit()
         return {
             "status": "ok",
             "tx_sig": sig,
@@ -876,3 +886,4 @@ def faucet(address: str, db: Session = Depends(get_db)):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"On-chain faucet error: {e}")
+
