@@ -17,3 +17,6 @@ dist/
 .env
 .DS_Store
 Thumbs.db
+*.zip
+*.backup.*
+implementation_plan*.md
