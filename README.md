@@ -6,6 +6,14 @@
 
 > You know those fantasy stories where a guild board is full of quests, and someone brave takes one on and comes back with proof? That is this app. Except the quests are real, the cities are real (Berlin, Paris, Rome...), and the reward is real money on the blockchain.
 
+> [!IMPORTANT]
+> ## 🚨 BIG NOTE: This is an MVP, and it has NO anti-AI-image detection
+> **SolGuild cannot currently tell a real photo from an AI-generated one.** The verifier checks the place (GPS) and whether the photo matches the quest, and it tries to spot screenshots and photos of screens. It does **not** have a dedicated detector for images made by generative AI.
+>
+> This means a determined person could submit a convincing AI-generated picture and pass. **Until AI-image detection exists, this system cannot be considered proven to work in the real world.** Everything here runs on Devnet with test SOL for exactly this reason.
+>
+> Fixing this is our **#1 priority** before any real money is involved. See [What Comes Next](#-what-comes-next).
+
 ---
 
 ## 📖 Table of Contents
@@ -100,7 +108,7 @@ Every upload goes through three gates, in order. Fail one and it stops there.
 |---|---|---|
 | **Gate 1: Intake** | Is this a real image file? | Opens and validates the file, saves a fingerprint (SHA-256) so the same photo cannot be reused |
 | **Gate 2: Location** | Were you actually there? | Reads GPS from the photo (or your device) and measures the distance to the quest pin. Must be within **150 metres** |
-| **Gate 3: Vision** | Is it the right thing, and is it real? | **Gemini 3.1 Flash-Lite** looks at the photo with the quest description. It rejects screenshots, photos of screens, stock images and unrelated pictures. It must be at least **80% confident** (75% for Sensitive, plus the letter checks) |
+| **Gate 3: Vision** | Is it the right thing, and does it look like a genuine on-site photo? | **Gemini 3.1 Flash-Lite** looks at the photo with the quest description. It is *instructed* to reject screenshots, photos of screens, stock images and unrelated pictures. It must be at least **80% confident** (75% for Sensitive, plus the letter checks). **It is not an AI-generated-image detector** (see the big note at the top) |
 
 When something is rejected, you see **why**, in plain words, for 5 seconds before the quest returns to the board.
 
@@ -304,6 +312,7 @@ Open **http://localhost:5173**. The dev server already forwards `/api` and `/ws`
 We would rather tell you than have you find out.
 
 - **The vault is a backend-held wallet, not yet an on-chain program.** Deposits and payouts are real Devnet transactions, but the rules ("pay on pass, hold on fail") are enforced by our server. A true smart contract is the next step.
+- **🚨 No anti-AI-image detection.** The MVP cannot reliably tell a real photo from an AI-generated one. Without that, we cannot honestly claim the verification works against cheaters. This is the single biggest gap.
 - **Devnet only.** All money is test SOL with no value.
 - **Location can be faked** from a normal browser. Photo GPS helps, but it is not bullet-proof.
 - **AI can be wrong.** It is strict by design, and borderline photos may be rejected.
@@ -314,6 +323,7 @@ We would rather tell you than have you find out.
 
 ## 🌅 What Comes Next
 
+- [ ] 🚨 **Anti-AI-image detection (top priority):** detect generated or edited images, check provenance data (such as C2PA / content credentials), and require live in-app camera capture with a fresh challenge
 - [ ] Move the vault into a real **Solana program** (Anchor) so the rules live on-chain
 - [ ] Verify deposits on the server before a quest goes live, and tie refunds and approvals to a **signed** wallet message
 - [ ] Real email delivery for verification codes
