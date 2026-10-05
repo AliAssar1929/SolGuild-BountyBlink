@@ -33,7 +33,8 @@ import {
   Shield,
   Scroll,
   FileText,
-  Clock
+  Clock,
+  MapPin
 } from 'lucide-vue-next'
 
 const { 
@@ -615,10 +616,10 @@ onMounted(async () => {
       
       <!-- Brand & Tabs -->
       <div class="flex items-center gap-6">
-        <div class="flex items-center gap-2 cursor-pointer select-none hover:opacity-85 transition-opacity" @click="navigateToLanding">
-          <Shield class="w-5 h-5 text-[#1A1A17]" />
+        <div class="flex items-center gap-2.5 cursor-pointer select-none hover:opacity-85 transition-opacity" @click="navigateToLanding">
+          <img src="/guild-logo.jpg" alt="SolGuild Shield" class="w-7 h-7 rounded-md border border-black shadow-[1.5px_1.5px_0px_#1A1A17] object-cover" />
           <span class="font-bold text-[17px] tracking-tight">SolGuild</span>
-          <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#FFD60A] text-[#1A1A17]">Devnet</span>
+          <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#FFD60A] text-[#1A1A17] border border-black shadow-[1px_1px_0px_#1A1A17]">Devnet</span>
         </div>
 
         <nav class="hidden md:flex items-center gap-5 text-[15px]">
@@ -695,7 +696,7 @@ onMounted(async () => {
           @click="showWalletModal = true"
           class="flex items-center gap-2 text-[13px] bg-[#F7F5F0] hover:bg-[#EAE6DC] px-2.5 py-1 rounded-[10px] border border-[#E3DFD6] transition-colors"
         >
-          <span class="w-2 h-2 rounded-full bg-[#1E7B4F]"></span>
+          <span class="w-2 h-2 rounded-full bg-[#1A1A17]"></span>
           <span class="font-mono text-[#5E5B53] hidden sm:inline">{{ publicKey.slice(0, 4) }}...{{ publicKey.slice(-4) }}</span>
           <span class="font-semibold text-[#1A1A17]">{{ balance.toFixed(3) }} SOL</span>
           <span class="text-[#5E5B53] text-[11px] hidden md:inline">({{ getUsdValue(balance) }})</span>
@@ -715,17 +716,19 @@ onMounted(async () => {
           <div class="flex items-center bg-[#F7F5F0] p-1 rounded-xl border border-[#E3DFD6] w-full max-w-xs text-xs font-semibold">
             <button 
               @click="mobileFeedView = 'list'"
-              class="flex-1 py-1.5 rounded-lg transition-all text-center"
+              class="flex-1 py-1.5 rounded-lg transition-all text-center flex items-center justify-center gap-1.5"
               :class="mobileFeedView === 'list' ? 'bg-[#1A1A17] text-[#FFD60A] shadow-xs' : 'text-[#5E5B53]'"
             >
-              📋 Quest List ({{ tasks.length }})
+              <FileText class="w-3.5 h-3.5" />
+              <span>Quest List ({{ tasks.length }})</span>
             </button>
             <button 
               @click="mobileFeedView = 'map'"
-              class="flex-1 py-1.5 rounded-lg transition-all text-center"
+              class="flex-1 py-1.5 rounded-lg transition-all text-center flex items-center justify-center gap-1.5"
               :class="mobileFeedView === 'map' ? 'bg-[#1A1A17] text-[#FFD60A] shadow-xs' : 'text-[#5E5B53]'"
             >
-              🗺️ Map Explorer
+              <MapPin class="w-3.5 h-3.5" />
+              <span>Map Explorer</span>
             </button>
           </div>
         </div>
@@ -1048,8 +1051,9 @@ onMounted(async () => {
                 :tasks="tasks" 
                 :selectedTask="selectedTask" 
               />
-              <div class="absolute bottom-2 left-2 px-2 py-0.5 bg-white/90 backdrop-blur rounded text-[11px] font-medium text-[#1A1A17] shadow-xs">
-                📍 Target Area
+              <div class="absolute bottom-2 left-2 px-2 py-0.5 bg-[#FAF8F5] border border-black shadow-[1px_1px_0px_#1A1A17] rounded text-[11px] font-medium text-[#1A1A17] flex items-center gap-1">
+                <MapPin class="w-3 h-3 text-[#1A1A17]" />
+                <span>Target Area</span>
               </div>
             </div>
 

@@ -157,28 +157,28 @@ const handleSubmit = () => {
               @click="applyPreset('Find my calico cat Mika near Boxhagener Platz', 'Search around park benches near Boxhagener Platz. Look for a calm calico cat with yellow bell collar.', 'Calico cat with yellow bell collar tag near bench', 'Civil Help', 'Berlin', 52.5113, 13.4593, 'Boxhagener Platz Square', 0.035)"
               class="p-2.5 text-left rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] hover:border-[#1A1A17] text-[12px] leading-snug cursor-pointer transition-colors"
             >
-              🐾 Find Cat (Civil Help)
+              Find Cat (Civil Help)
             </button>
             <button 
               type="button"
               @click="applyPreset('Designated driver: Drive patron car home from Malasaña tapas tour', 'Meet patron at Plaza del Dos de Mayo. Drive patron car safely to their parking garage in Chamberí.', 'Parked vehicle in private residential bay with garage sign', 'Civil Help', 'Madrid', 40.4276, -3.7037, 'Plaza del Dos de Mayo', 0.045)"
               class="p-2.5 text-left rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] hover:border-[#1A1A17] text-[12px] leading-snug cursor-pointer transition-colors"
             >
-              🚗 Driver Escort (Civil Help)
+              Driver Escort (Civil Help)
             </button>
             <button 
               type="button"
               @click="applyPreset('Surveillance & license plate log of black courier van in Mayfair', 'Discreetly photograph logistics van plate and submit a formal investigation letter detailing origin and timetable.', 'Black logistics van rear registration plate with Mayfair alley paving visible', 'Sensitive', 'London', 51.5097, -0.1492, 'Mount Street Commercial Alley', 0.06)"
               class="p-2.5 text-left rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] hover:border-[#1A1A17] text-[12px] leading-snug cursor-pointer transition-colors"
             >
-              🔍 Van Intel (Sensitive)
+              Van Intel (Sensitive)
             </button>
             <button 
               type="button"
               @click="applyPreset('Artisan pistachio tart showcase photo & tasting reel at Belleville bakery', 'Purchase seasonal pistachio tart from bakery display, place by window terrace with shop signage, and capture commercial photo.', 'Pistachio pastry confection in packaging with Boulangerie Belleville storefront lettering', 'Commercial', 'Paris', 48.8722, 2.3811, 'Boulangerie Artisanale Belleville', 0.03)"
               class="p-2.5 text-left rounded-[8px] border border-[#E3DFD6] bg-[#F7F5F0] hover:border-[#1A1A17] text-[12px] leading-snug cursor-pointer transition-colors"
             >
-              📸 Pastry Reel (Commercial)
+              Pastry Reel (Commercial)
             </button>
           </div>
         </div>
