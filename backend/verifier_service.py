@@ -113,16 +113,28 @@ class VerifierService:
                 "4. Be strict: If it's a random unrelated image, a selfie, a meme, an empty room, or does not match the requested criteria, reject it immediately."
             )
 
-            model_name = getattr(settings, "GEMINI_MODEL", "gemini-3.1-flash-lite")
-            response = self._gemini_client.models.generate_content(
-                model=model_name,
-                contents=[prompt, pil_image],
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=VisionVerificationResult,
-                    temperature=0.1
-                )
-            )
+            candidate_models = [getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash"), "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+            response = None
+            for model_name in candidate_models:
+                try:
+                    response = self._gemini_client.models.generate_content(
+                        model=model_name,
+                        contents=[prompt, pil_image],
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=VisionVerificationResult,
+                            temperature=0.1
+                        )
+                    )
+                    if response and response.parsed:
+                        break
+                except Exception as model_err:
+                    print(f"[VerifierService] Model {model_name} attempt error: {model_err}")
+                    continue
+
+            if not response or not response.parsed:
+                return None
+
             parsed: VisionVerificationResult = response.parsed
             is_pass = parsed.is_authentic_onsite and parsed.matches_target_criteria and (parsed.confidence_score >= 80.0)
             return {
@@ -168,16 +180,28 @@ class VerifierService:
                 "4. Be uncompromising. If the report is gibberish, a brief sentence, or disconnected from the photo, reject it immediately."
             )
 
-            model_name = getattr(settings, "GEMINI_MODEL", "gemini-3.1-flash-lite")
-            response = self._gemini_client.models.generate_content(
-                model=model_name,
-                contents=[prompt, pil_image],
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=SensitiveVerificationResult,
-                    temperature=0.1
-                )
-            )
+            candidate_models = [getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash"), "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+            response = None
+            for model_name in candidate_models:
+                try:
+                    response = self._gemini_client.models.generate_content(
+                        model=model_name,
+                        contents=[prompt, pil_image],
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=SensitiveVerificationResult,
+                            temperature=0.1
+                        )
+                    )
+                    if response and response.parsed:
+                        break
+                except Exception as model_err:
+                    print(f"[VerifierService] Model {model_name} sensitive attempt error: {model_err}")
+                    continue
+
+            if not response or not response.parsed:
+                return None
+
             parsed: SensitiveVerificationResult = response.parsed
             is_pass = (
                 parsed.is_authentic_onsite and
