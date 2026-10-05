@@ -153,34 +153,78 @@ export function useWallet() {
   const sendEscrowDepositTransaction = async (amountSol: number, toPubkeyStr: string): Promise<string> => {
     const provider = getProvider()
     if (!provider || !publicKey.value) {
-      throw new Error('Phantom wallet not connected')
+      throw new Error('Phantom wallet is not connected. Please connect your wallet first.')
     }
 
+    // 1. Fetch fresh blockhash via resilient backend RPC proxy to avoid browser CORS/429
+    let blockhash = ''
     try {
-      const fromPubkey = new PublicKey(publicKey.value)
-      const toPubkey = new PublicKey(toPubkeyStr)
-      const lamports = Math.round(amountSol * LAMPORTS_PER_SOL)
+      const bhRes = await fetch('/api/solana/blockhash')
+      if (bhRes.ok) {
+        const bhData = await bhRes.json()
+        blockhash = bhData.blockhash
+      }
+    } catch (e) {
+      console.warn('Backend blockhash proxy warning:', e)
+    }
 
+    if (!blockhash) {
       const connection = new Connection(clusterApiUrl('devnet'), 'confirmed')
-      const { blockhash } = await connection.getLatestBlockhash('confirmed')
+      const bh = await connection.getLatestBlockhash('confirmed')
+      blockhash = bh.blockhash
+    }
 
-      const tx = new Transaction().add(
-        SystemProgram.transfer({
-          fromPubkey,
-          toPubkey,
-          lamports
-        })
-      )
-      tx.recentBlockhash = blockhash
-      tx.feePayer = fromPubkey
+    const fromPubkey = new PublicKey(publicKey.value)
+    const toPubkey = new PublicKey(toPubkeyStr)
+    const lamports = Math.round(amountSol * LAMPORTS_PER_SOL)
 
-      // Prompt Phantom wallet to sign and send on Solana Devnet
+    const tx = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey,
+        toPubkey,
+        lamports
+      })
+    )
+    tx.recentBlockhash = blockhash
+    tx.feePayer = fromPubkey
+
+    // Method A: Attempt direct signAndSendTransaction in Phantom
+    try {
       const { signature } = await provider.signAndSendTransaction(tx)
-      return signature
-    } catch (err: any) {
-      console.warn('Phantom on-chain transaction fallback:', err)
-      // Deterministic devnet lock fallback if user wallet has no gas or rejects RPC
-      return `DEVNET_TX_${Date.now()}_${publicKey.value.slice(0, 6)}`
+      if (signature) {
+        return signature
+      }
+    } catch (sendErr: any) {
+      // If user deliberately rejected in Phantom popup, re-throw immediately
+      if (sendErr?.code === 4001 || sendErr?.message?.includes('User rejected')) {
+        throw new Error('Transaction was cancelled in Phantom wallet.')
+      }
+      console.warn('Phantom signAndSend encountered network issue, trying signTransaction + backend proxy:', sendErr)
+    }
+
+    // Method B: Prompt Phantom to sign the transaction, then broadcast through backend RPC proxy
+    try {
+      const signedTx = await provider.signTransaction(tx)
+      const rawBytes = signedTx.serialize()
+      const rawBase64 = btoa(String.fromCharCode(...new Uint8Array(rawBytes)))
+
+      const broadcastRes = await fetch('/api/solana/send-raw-transaction', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ raw_tx_base64: rawBase64 })
+      })
+
+      const broadcastData = await broadcastRes.json()
+      if (broadcastRes.ok && broadcastData.tx_sig) {
+        return broadcastData.tx_sig
+      } else {
+        throw new Error(broadcastData.detail || 'Solana Devnet rejected the transaction.')
+      }
+    } catch (signErr: any) {
+      if (signErr?.code === 4001 || signErr?.message?.includes('User rejected')) {
+        throw new Error('Transaction was cancelled in Phantom wallet.')
+      }
+      throw new Error(signErr.message || 'Failed to sign and broadcast escrow deposit to Solana Devnet.')
     }
   }
 

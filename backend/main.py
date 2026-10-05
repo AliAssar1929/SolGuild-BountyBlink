@@ -821,23 +821,41 @@ def demo_usage(db: Session = Depends(get_db)):
         "paid_count": paid_count,
         "total_tokens": total_tokens,
         "cache_hits": 2,
-        "active_model": "gemini-2.5-flash"
+        "active_model": getattr(settings, "GEMINI_MODEL", "gemini-3.1-flash-lite")
     }
 
-@app.post("/api/demo/reset")
-def reset_demo(db: Session = Depends(get_db)):
-    db.query(Submission).delete()
-    db.query(Claim).delete()
-    db.query(Task).delete()
-    db.commit()
-    seed_demo_data(db)
-    return {"status": "ok", "message": "Database reset to 8 multi-city tasks."}
+class RawTxRequest(BaseModel):
+    raw_tx_base64: str
+
+@app.get("/api/solana/blockhash")
+def get_solana_blockhash():
+    info = solana_service.get_latest_blockhash()
+    if not info:
+        raise HTTPException(status_code=503, detail="Unable to fetch Solana Devnet blockhash from validators")
+    return info
+
+@app.post("/api/solana/send-raw-transaction")
+def send_raw_transaction(req: RawTxRequest):
+    try:
+        ok, sig, explorer_url = solana_service.broadcast_raw_transaction(req.raw_tx_base64)
+        return {"status": "ok", "tx_sig": sig, "explorer_url": explorer_url}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/wallet/faucet/{address}")
 def faucet(address: str, db: Session = Depends(get_db)):
-    success, sig = solana_service.request_airdrop(address, amount_sol=0.05)
-    user = db.query(User).filter(User.address == address).first()
-    if user:
-        user.airdropped_gas = True
-        db.commit()
-    return {"status": "ok", "tx_sig": sig, "amount": 0.05, "cluster": "devnet"}
+    try:
+        success, sig, explorer_url = solana_service.request_airdrop(address, amount_sol=0.05)
+        user = db.query(User).filter(User.address == address).first()
+        if user:
+            user.airdropped_gas = True
+            db.commit()
+        return {
+            "status": "ok",
+            "tx_sig": sig,
+            "amount": 0.05,
+            "cluster": "devnet",
+            "explorer_url": explorer_url
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"On-chain faucet error: {e}")

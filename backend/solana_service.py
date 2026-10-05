@@ -2,7 +2,7 @@ import base64
 import json
 import os
 import time
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, Any
 import httpx
 from solders.keypair import Keypair
 from solders.pubkey import Pubkey
@@ -42,7 +42,7 @@ class SolanaService:
         }
         for url in settings.DEVNET_RPC_URLS:
             try:
-                with httpx.Client(timeout=6.0) as client:
+                with httpx.Client(timeout=8.0) as client:
                     resp = client.post(url, json=payload)
                     if resp.status_code == 200:
                         data = resp.json()
@@ -52,29 +52,58 @@ class SolanaService:
                 continue
         return None
 
+    def get_latest_blockhash(self) -> Optional[Dict[str, Any]]:
+        """Fetches fresh confirmed blockhash from Devnet."""
+        result = self._rpc_call("getLatestBlockhash", [{"commitment": "confirmed"}])
+        if result and "value" in result:
+            return {
+                "blockhash": result["value"]["blockhash"],
+                "last_valid_block_height": result["value"].get("lastValidBlockHeight")
+            }
+        return None
+
     def get_balance(self, pubkey_str: Optional[str] = None) -> float:
         target = pubkey_str or self.pubkey_str
         result = self._rpc_call("getBalance", [target, {"commitment": "confirmed"}])
         if result and "value" in result:
             return result["value"] / 1_000_000_000.0
-        return 0.25  # Healthy demo balance fallback
+        return 0.0
 
-    def request_airdrop(self, target_pubkey_str: str, amount_sol: float = 0.05) -> Tuple[bool, str]:
-        lamports = int(amount_sol * 1_000_000_000)
-        result = self._rpc_call("requestAirdrop", [target_pubkey_str, lamports])
-        if result and isinstance(result, str):
-            return True, result
-        mock_sig = f"AIRDROP_{int(time.time())}_{target_pubkey_str[:8]}"
-        return True, mock_sig
+    def broadcast_raw_transaction(self, raw_tx_base64: str) -> Tuple[bool, str, str]:
+        """Broadcasts a client-signed raw transaction directly to Solana Devnet."""
+        send_result = self._rpc_call("sendTransaction", [
+            raw_tx_base64,
+            {"encoding": "base64", "preflightCommitment": "confirmed"}
+        ])
+        if send_result and isinstance(send_result, str):
+            sig = send_result
+            explorer_url = f"https://explorer.solana.com/tx/{sig}{settings.DEVNET_CLUSTER_PARAM}"
+            return True, sig, explorer_url
+        
+        # If preflight error returned
+        raise ValueError(f"Solana Devnet rejected transaction: {send_result}")
+
+    def request_airdrop(self, target_pubkey_str: str, amount_sol: float = 0.05) -> Tuple[bool, str, str]:
+        """Funds target wallet with real Devnet SOL directly from the funded Escrow Vault."""
+        ok, sig, explorer_url = self.transfer_sol(target_pubkey_str, amount_sol)
+        if ok:
+            return True, sig, explorer_url
+        raise RuntimeError("Failed to transfer Devnet SOL from escrow vault")
 
     def transfer_sol(self, to_pubkey_str: str, amount_sol: float) -> Tuple[bool, str, str]:
-        """Transfers SOL from backend escrow to worker or poster."""
+        """Transfers SOL on-chain from backend escrow to worker or poster."""
         lamports = int(amount_sol * 1_000_000_000)
-        try:
-            to_pk = Pubkey.from_string(to_pubkey_str)
-            blockhash_info = self._rpc_call("getLatestBlockhash", [{"commitment": "confirmed"}])
-            
-            if blockhash_info and "value" in blockhash_info:
+        to_pk = Pubkey.from_string(to_pubkey_str)
+        
+        # Try up to 3 times to get fresh blockhash and broadcast
+        last_err = None
+        for attempt in range(3):
+            try:
+                blockhash_info = self._rpc_call("getLatestBlockhash", [{"commitment": "confirmed"}])
+                if not blockhash_info or "value" not in blockhash_info:
+                    time.sleep(0.5)
+                    continue
+
                 recent_blockhash_str = blockhash_info["value"]["blockhash"]
                 recent_blockhash = Hash.from_string(recent_blockhash_str)
                 
@@ -88,17 +117,18 @@ class SolanaService:
                 tx_bytes = bytes(tx)
                 tx_base64 = base64.b64encode(tx_bytes).decode("utf-8")
                 
-                send_result = self._rpc_call("sendTransaction", [tx_base64, {"encoding": "base64"}])
+                send_result = self._rpc_call("sendTransaction", [
+                    tx_base64,
+                    {"encoding": "base64", "preflightCommitment": "confirmed"}
+                ])
                 if send_result and isinstance(send_result, str):
                     sig = send_result
                     explorer_url = f"https://explorer.solana.com/tx/{sig}{settings.DEVNET_CLUSTER_PARAM}"
                     return True, sig, explorer_url
-        except Exception as e:
-            print(f"[SolanaService] On-chain transfer attempt: {e}")
+            except Exception as e:
+                last_err = e
+                time.sleep(1.0)
 
-        # Deterministic simulation signature if devnet RPC is unavailable/rate-limited
-        sim_sig = f"5kH9Blink_{int(time.time())}_{to_pubkey_str[:8]}"
-        sim_url = f"https://explorer.solana.com/tx/{sim_sig}{settings.DEVNET_CLUSTER_PARAM}"
-        return True, sim_sig, sim_url
+        raise RuntimeError(f"On-chain transfer failed after 3 attempts: {last_err}")
 
 solana_service = SolanaService()

@@ -450,38 +450,46 @@ const handleCreateTask = async (payload: any) => {
     return
   }
 
+  // 1. Balance verification: ensure user has sufficient Devnet SOL before prompting transaction
+  if (balance.value < payload.reward_sol) {
+    alert(`Insufficient Devnet SOL in your wallet. You currently have ${balance.value.toFixed(4)} SOL, but this quest requires ${payload.reward_sol} SOL. Please click 'Get test SOL' in the header to fund your wallet.`)
+    return
+  }
+
   submittingPost.value = true
   try {
-    // 1. Get escrow vault public key from backend
+    // 2. Get escrow vault public key from backend
     const healthRes = await fetch('/api/health')
     const healthData = await healthRes.json()
-    const escrowPubkey = healthData.escrow_pubkey || 'EscrowVault11111111111111111111111111111111'
+    const escrowPubkey = healthData.escrow_pubkey || 'JE922ncEr1G2bHrCCRpFDmT9q4y752aN4WxkPS4s1BDn'
 
-    // 2. Prompt Phantom wallet to sign and broadcast on-chain SOL escrow transfer
-    let fundTxSig = ''
-    try {
-      fundTxSig = await sendEscrowDepositTransaction(payload.reward_sol, escrowPubkey)
-    } catch (txErr) {
-      console.warn('Escrow deposit simulation fallback:', txErr)
-      fundTxSig = `DEVNET_TX_${Date.now()}_${publicKey.value.slice(0, 6)}`
+    // 3. Prompt Phantom wallet to sign and broadcast real on-chain SOL escrow transfer
+    const fundTxSig = await sendEscrowDepositTransaction(payload.reward_sol, escrowPubkey)
+    if (!fundTxSig || !fundTxSig.trim()) {
+      throw new Error('On-chain escrow transaction was not confirmed.')
     }
 
     payload.fund_tx_sig = fundTxSig
 
-    // 3. Post task to backend with on-chain lock transaction signature
+    // 4. Post task to backend with confirmed on-chain lock transaction signature
     const res = await fetch('/api/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     })
 
-    if (res.ok) {
-      await fetchTasks()
-      await fetchUserActivity()
-      navigateTo('activity')
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      throw new Error(errData.detail || 'Failed to record quest on server.')
     }
-  } catch (e) {
-    console.error(e)
+
+    await refreshProfile()
+    await fetchTasks()
+    await fetchUserActivity()
+    navigateTo('activity')
+  } catch (e: any) {
+    console.error('Quest creation failed:', e)
+    alert(e.message || 'On-chain escrow transaction failed or was cancelled.')
   } finally {
     submittingPost.value = false
   }
