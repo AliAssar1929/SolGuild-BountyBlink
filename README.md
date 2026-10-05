@@ -1,41 +1,41 @@
-# ⚔️ SolGuild (BountyBlink)
+# SolGuild (BountyBlink)
 
 ### *The adventurer's guild for the real world. Post a quest, lock the reward, get paid for proof.*
 
-![Network](https://img.shields.io/badge/Solana-Devnet-9945FF) ![Frontend](https://img.shields.io/badge/Vue-3-42b883) ![Backend](https://img.shields.io/badge/FastAPI-Python-009688) ![AI](https://img.shields.io/badge/Gemini-3.1%20Flash--Lite-4285F4) ![Region](https://img.shields.io/badge/Focus-Europe-FFD60A)
+![Network](https://img.shields.io/badge/Solana-Devnet-9945FF) ![Frontend](https://img.shields.io/badge/Vue-3-42b883) ![Backend](https://img.shields.io/badge/FastAPI-Python-009688) ![AI](https://img.shields.io/badge/Gemini-2.5%20Flash-4285F4) ![Region](https://img.shields.io/badge/Focus-Europe-FFD60A)
 
 > You know those fantasy stories where a guild board is full of quests, and someone brave takes one on and comes back with proof? That is this app. Except the quests are real, the cities are real (Berlin, Paris, Rome...), and the reward is real money on the blockchain.
 
 > [!IMPORTANT]
-> ## 🚨 BIG NOTE: This is an MVP, and it has NO anti-AI-image detection
+> ## BIG NOTE: This is an MVP, and it has NO anti-AI-image detection
 > **SolGuild cannot currently tell a real photo from an AI-generated one.** The verifier checks the place (GPS) and whether the photo matches the quest, and it tries to spot screenshots and photos of screens. It does **not** have a dedicated detector for images made by generative AI.
 >
 > This means a determined person could submit a convincing AI-generated picture and pass. **Until AI-image detection exists, this system cannot be considered proven to work in the real world.** Everything here runs on Devnet with test SOL for exactly this reason.
 >
-> Fixing this is our **#1 priority** before any real money is involved. See [What Comes Next](#-what-comes-next).
+> Fixing this is our **#1 priority** before any real money is involved. See [What Comes Next](#what-comes-next).
 
 ---
 
-## 📖 Table of Contents
+## Table of Contents
 
-1. [The Problem](#-the-problem)
-2. [Our Answer](#-our-answer)
-3. [How a Quest Works](#-how-a-quest-works)
-4. [The Three Guild Boards](#-the-three-guild-boards)
-5. [How Proof Is Checked](#-how-proof-is-checked)
-6. [What Happens When You Fail](#-what-happens-when-you-fail)
-7. [Ranks and Experience](#-ranks-and-experience)
-8. [Try It in 3 Minutes](#-try-it-in-3-minutes-for-judges)
-9. [Tech Stack](#-tech-stack)
-10. [How the Pieces Fit](#-how-the-pieces-fit)
-11. [Project Map](#-project-map)
-12. [Run It Yourself](#-run-it-yourself)
-13. [Honest Limits](#-honest-limits)
-14. [What Comes Next](#-what-comes-next)
+1. [The Problem](#the-problem)
+2. [Our Answer](#our-answer)
+3. [How a Quest Works](#how-a-quest-works)
+4. [The Three Guild Boards](#the-three-guild-boards)
+5. [How Proof Is Checked](#how-proof-is-checked)
+6. [What Happens When You Fail](#what-happens-when-you-fail)
+7. [Ranks and Experience](#ranks-and-experience)
+8. [Try It in 3 Minutes](#try-it-in-3-minutes-for-judges)
+9. [Tech Stack](#tech-stack)
+10. [How the Pieces Fit](#how-the-pieces-fit)
+11. [Project Map](#project-map)
+12. [Run It Yourself](#run-it-yourself)
+13. [Honest Limits](#honest-limits)
+14. [What Comes Next](#what-comes-next)
 
 ---
 
-## 😩 The Problem
+## The Problem
 
 Small jobs in the real world are hard to hand off to strangers.
 
@@ -45,7 +45,7 @@ Small jobs in the real world are hard to hand off to strangers.
 
 Today you either trust a stranger blindly and pay first, or the helper does the work and hopes you pay after. **Someone always has to trust someone.**
 
-## 💡 Our Answer
+## Our Answer
 
 **SolGuild removes the trust problem.**
 
@@ -58,7 +58,7 @@ Nobody can run off with the money. Nobody has to work for free.
 
 ---
 
-## 🗺️ How a Quest Works
+## How a Quest Works
 
 ```
  Guild Master (poster)                              Adventurer (helper)
@@ -82,25 +82,25 @@ Every deposit and payout is a **real transaction on Solana Devnet**. You can cli
 
 ---
 
-## 🏰 The Three Guild Boards
+## The Three Guild Boards
 
 Every quest belongs to one of three boards. Each one has its own rules for what counts as proof.
 
 | Board | What it is | Example quests | What you must hand in |
 |---|---|---|---|
-| 🤝 **Civil Help** | Everyday kindness | Find a lost cat near the fountain. Drive a friend's car home safely. Water someone's plants. | One clear photo taken at the location |
-| 🕵️ **Sensitive** | Careful, serious work | Confirm who owns a vehicle at a depot. Trace where an antique came from. Walk a VIP safely through the old town. | A photo **and** a written investigation letter **and** the source of your information |
-| 🛍️ **Commercial** | Content and products | Film a short ad for a bakery. Photograph a new boot on a real shop shelf. | A photo or video-style capture of the item, at the shop |
+| **Civil Help** | Everyday kindness | Find a lost cat near the fountain. Drive a friend's car home safely. Water someone's plants. | One clear photo taken at the location |
+| **Sensitive** | Careful, serious work | Confirm who owns a vehicle at a depot. Trace where an antique came from. Walk a VIP safely through the old town. | A photo **and** a written investigation letter **and** the source of your information |
+| **Commercial** | Content and products | Film a short ad for a bakery. Photograph a new boot on a real shop shelf. | A photo or video-style capture of the item, at the shop |
 
 **8 European cities, 88 starter quests:** London, Paris, Berlin, Madrid, Rome, Amsterdam, Barcelona, Vienna. At least 10 in each, a mix of all three boards. We focus on Europe only.
 
-### 📜 Why Sensitive quests ask for more
+### Why Sensitive quests ask for more
 
 A photo alone is not enough proof for sensitive work. So the helper also writes a **field report** (at least 35 characters) and states **where the information came from** (for example: "saw it in person", "municipal record", "spoke to a witness"). The AI reads the letter *and* looks at the photo, and checks that they agree with each other.
 
 ---
 
-## 🔍 How Proof Is Checked
+## How Proof Is Checked
 
 Every upload goes through three gates, in order. Fail one and it stops there.
 
@@ -108,13 +108,13 @@ Every upload goes through three gates, in order. Fail one and it stops there.
 |---|---|---|
 | **Gate 1: Intake** | Is this a real image file? | Opens and validates the file, saves a fingerprint (SHA-256) so the same photo cannot be reused |
 | **Gate 2: Location** | Were you actually there? | Reads GPS from the photo (or your device) and measures the distance to the quest pin. Must be within **150 metres** |
-| **Gate 3: Vision** | Is it the right thing, and does it look like a genuine on-site photo? | **Gemini 3.1 Flash-Lite** looks at the photo with the quest description. It is *instructed* to reject screenshots, photos of screens, stock images and unrelated pictures. It must be at least **80% confident** (75% for Sensitive, plus the letter checks). **It is not an AI-generated-image detector** (see the big note at the top) |
+| **Gate 3: Vision** | Is it the right thing, and does it look like a genuine on-site photo? | **Google Gemini 2.5 Flash** looks at the photo with the quest description. It is *instructed* to reject screenshots, photos of screens, stock images and unrelated pictures. It must be at least **80% confident** (75% for Sensitive, plus the letter checks). **It is not an AI-generated-image detector** (see the big note at the top) |
 
 When something is rejected, you see **why**, in plain words, for 5 seconds before the quest returns to the board.
 
 ---
 
-## 🛡️ What Happens When You Fail
+## What Happens When You Fail
 
 This part matters, so we made it very clear.
 
@@ -126,7 +126,7 @@ This part matters, so we made it very clear.
 
 ---
 
-## 🎖️ Ranks and Experience
+## Ranks and Experience
 
 Every completed quest gives the helper **50 EXP**. EXP climbs a rank ladder, just like in the stories.
 
@@ -144,7 +144,7 @@ Your **Guild License** page shows your name, rank, progress bar, quests posted, 
 
 ---
 
-## ⏱️ Try It in 3 Minutes (for judges)
+## Try It in 3 Minutes (for judges)
 
 **You need:** the [Phantom wallet](https://phantom.app/) browser extension set to **Devnet**. That's it. The app tops up your wallet with a little test SOL.
 
@@ -154,15 +154,15 @@ Your **Guild License** page shows your name, rank, progress bar, quests posted, 
 4. **Issue a quest.** Pick a board, pick a spot in Europe, set a reward (try `0.035 SOL`). Phantom asks you to approve the deposit. Click the transaction link afterwards: it is real and visible on Solana Explorer.
 5. **Switch to a second wallet** (or use the **Demo tools** drawer) and **claim** the quest.
 6. **Submit proof.** Use the Demo tools to try both outcomes:
-   - ✅ *Valid proof* → reward is paid out, helper gets +50 EXP.
-   - ❌ *Fake proof* → 5-second rejection card, reward stays locked, quest returns with **Failed 1x**.
+   - *Valid proof* -> reward is paid out, helper gets +50 EXP.
+   - *Fake proof* -> 5-second rejection card, reward stays locked, quest returns with **Failed 1x**.
 7. Open **Activity** to see the full audit trail of locks, payouts and links.
 
-> 💡 The **Demo tools** drawer exists so you can test both results quickly without flying to Madrid.
+> The **Demo tools** drawer exists so you can test both results quickly without flying to Madrid.
 
 ---
 
-## 🧰 Tech Stack
+## Tech Stack
 
 | Part | What we used | Why |
 |---|---|---|
@@ -171,13 +171,13 @@ Your **Guild License** page shows your name, rank, progress bar, quests posted, 
 | **Wallet** | Phantom + `@solana/web3.js` | The most common Solana wallet |
 | **Backend** | FastAPI (Python), SQLAlchemy, SQLite | Simple and quick to run anywhere |
 | **Blockchain** | Solana Devnet (`solders`, `solana`) | Real transactions, test money only |
-| **AI Verifier** | Google Gemini 3.1 Flash-Lite (structured JSON output) | Reads photos and letters, answers in a fixed format |
+| **AI Verifier** | Google Gemini 2.5 Flash (structured JSON output) | Reads photos and letters, answers in a fixed format |
 | **Live updates** | WebSockets (`/ws/quests`) | New quests and claims show up instantly for everyone |
 | **Address search** | OpenStreetMap Nominatim | Find a street without needing a paid map service |
 
 ---
 
-## 🧩 How the Pieces Fit
+## How the Pieces Fit
 
 ```mermaid
 flowchart LR
@@ -201,39 +201,37 @@ flowchart LR
 
 ---
 
-## 🗂️ Project Map
+## Project Map
 
 ```
 BountyBlink/
-├── README.md                    ← you are here
-├── implementation_plan.md       ← design notes and the plan behind recent fixes
-├── fixtures/                    ← reserved for demo images
+├── README.md                    <- you are here
 ├── backend/
-│   ├── main.py                  ← the API: quests, claims, proofs, payouts, profiles, live feed
-│   ├── models.py                ← database tables (Task, Claim, Submission, User…)
-│   ├── solana_service.py        ← the guild vault: sends SOL, reads balances, relays transactions
-│   ├── verifier_service.py      ← the 3-gate proof checker (and the Gemini calls)
-│   ├── seed_data.py             ← the 88 starter quests across 8 European cities
-│   ├── config.py                ← settings (RPC list, geofence, timers, AI model)
+│   ├── main.py                  <- the API: quests, claims, proofs, payouts, profiles, live feed
+│   ├── models.py                <- database tables (Task, Claim, Submission, User...)
+│   ├── solana_service.py        <- the guild vault: sends SOL, reads balances, relays transactions
+│   ├── verifier_service.py      <- the 3-gate proof checker (and the Gemini calls)
+│   ├── seed_data.py             <- the 88 starter quests across 8 European cities
+│   ├── config.py                <- settings (RPC list, geofence, timers, AI model)
 │   └── requirements.txt
 └── frontend/
-    ├── vite.config.ts           ← dev server + proxy to the backend
+    ├── vite.config.ts           <- dev server + proxy to the backend
     └── src/
-        ├── App.vue              ← the main screen: board, map, quest details, activity
-        ├── composables/         ← logic kept out of the screens
-        │   ├── useWallet.ts     ← Phantom connect, balance, escrow deposit
-        │   ├── useGuildSocket.ts← live updates
-        │   └── useSolPrice.ts   ← SOL → USD display
-        └── components/          ← the building blocks
-            ├── PostTaskForm.vue          ← issue a quest
-            ├── SensitiveDossierModal.vue ← photo + letter + source form
-            ├── VerificationSteps.vue     ← the live 4-step checker display
-            ├── MapCanvas.vue             ← map with quest pins
-            ├── ProfileView.vue           ← Guild License, rank, EXP
-            ├── StatusWord.vue / StatusStamp.vue ← Open, Failed 1x, Paid labels
-            ├── TxLink.vue                ← opens a transaction on Solana Explorer
+        ├── App.vue              <- the main screen: board, map, quest details, activity
+        ├── composables/         <- logic kept out of the screens
+        │   ├── useWallet.ts     <- Phantom connect, balance, escrow deposit
+        │   ├── useGuildSocket.ts<- live updates
+        │   └── useSolPrice.ts   <- SOL -> USD display
+        └── components/          <- the building blocks
+            ├── PostTaskForm.vue          <- issue a quest
+            ├── SensitiveDossierModal.vue <- photo + letter + source form
+            ├── VerificationSteps.vue     <- the live 4-step checker display
+            ├── MapCanvas.vue             <- map with quest pins
+            ├── ProfileView.vue           <- Guild License, rank, EXP
+            ├── StatusWord.vue            <- Open, Failed 1x, Paid labels
+            ├── TxLink.vue                <- opens a transaction on Solana Explorer
             ├── WalletModal.vue / UserProfileModal.vue
-            └── …filters, cards, rows, empty states
+            └── ...filters, cards, rows, empty states
 ```
 
 ### Main API doors
@@ -244,24 +242,24 @@ BountyBlink/
 | Issue a quest | `POST /api/tasks` |
 | Claim a quest | `POST /api/tasks/{id}/claim` |
 | Hand in proof | `POST /api/tasks/{id}/submit` |
-| Poster approves / refunds | `POST /api/tasks/{id}/approve`, `…/refund` |
-| Profile, rank, activity | `GET /api/user/{address}`, `…/activity`, `POST /api/user/profile` |
-| Email check | `POST /api/user/email/send-code`, `…/verify` |
+| Poster approves / refunds | `POST /api/tasks/{id}/approve`, `.../refund` |
+| Profile, rank, activity | `GET /api/user/{address}`, `.../activity`, `POST /api/user/profile` |
+| Email check | `POST /api/user/email/send-code`, `.../verify` |
 | Solana helpers | `GET /api/solana/blockhash`, `POST /api/solana/send-raw-transaction` |
 | Test SOL | `GET /api/wallet/faucet/{address}` |
 | Live feed | `WS /ws/quests` |
 
 ---
 
-## 🚀 Run It Yourself
+## Run It Yourself
 
 **You need:** Python 3.12+, Node 20+, Git, and Phantom on Devnet.
 
 ### 1) Get the code
 
 ```bash
-git clone <your-repo-url>
-cd BountyBlink
+git clone https://github.com/AliAssar1929/SolGuild-BountyBlink.git
+cd SolGuild-BountyBlink
 ```
 
 ### 2) Start the backend
@@ -278,7 +276,7 @@ Create a file called `backend/.env`:
 
 ```env
 GEMINI_API_KEY=your_own_gemini_key_here
-GEMINI_MODEL=gemini-3.1-flash-lite
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
 Then run:
@@ -307,23 +305,23 @@ Open **http://localhost:5173**. The dev server already forwards `/api` and `/ws`
 
 ---
 
-## ⚠️ Honest Limits
+## Honest Limits
 
 We would rather tell you than have you find out.
 
 - **The vault is a backend-held wallet, not yet an on-chain program.** Deposits and payouts are real Devnet transactions, but the rules ("pay on pass, hold on fail") are enforced by our server. A true smart contract is the next step.
-- **🚨 No anti-AI-image detection.** The MVP cannot reliably tell a real photo from an AI-generated one. Without that, we cannot honestly claim the verification works against cheaters. This is the single biggest gap.
+- **No anti-AI-image detection.** The MVP cannot reliably tell a real photo from an AI-generated one. Without that, we cannot honestly claim the verification works against cheaters. This is the single biggest gap.
 - **Devnet only.** All money is test SOL with no value.
 - **Location can be faked** from a normal browser. Photo GPS helps, but it is not bullet-proof.
 - **AI can be wrong.** It is strict by design, and borderline photos may be rejected.
 - **Demo shortcuts exist.** The "Demo tools" drawer, the email code shown on screen, and the reset button are for judging only and must be removed or locked before any real launch.
-- **Not production-hardened yet.** See [What Comes Next](#-what-comes-next) for what we would fix before real money is involved.
+- **Not production-hardened yet.** See [What Comes Next](#what-comes-next) for what we would fix before real money is involved.
 
 ---
 
-## 🌅 What Comes Next
+## What Comes Next
 
-- [ ] 🚨 **Anti-AI-image detection (top priority):** detect generated or edited images, check provenance data (such as C2PA / content credentials), and require live in-app camera capture with a fresh challenge
+- [ ] **Anti-AI-image detection (top priority):** detect generated or edited images, check provenance data (such as C2PA / content credentials), and require live in-app camera capture with a fresh challenge
 - [ ] Move the vault into a real **Solana program** (Anchor) so the rules live on-chain
 - [ ] Verify deposits on the server before a quest goes live, and tie refunds and approvals to a **signed** wallet message
 - [ ] Real email delivery for verification codes
@@ -335,15 +333,15 @@ We would rather tell you than have you find out.
 
 ---
 
-## 👥 Team
+## Team
 
-Built for the hackathon by the SolGuild crew. *(Add names and roles here.)*
+Built for the hackathon by Ali Haji Amou Asar and the SolGuild team.
 
 ---
 
 <div align="center">
 
-**Post the quest. Lock the reward. Bring the proof.** ⚔️
+**Post the quest. Lock the reward. Bring the proof.**
 
 *Devnet MVP · Test SOL only · Open source*
 
