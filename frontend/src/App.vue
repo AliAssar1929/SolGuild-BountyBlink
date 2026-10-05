@@ -77,6 +77,7 @@ interface Task {
   refund_tx_sig?: string
   claim_expires_at?: string
   claimed_by?: string
+  failed_attempts?: number
 }
 
 // Navigation & Modals
@@ -127,6 +128,32 @@ const filterCity = ref('ALL')
 const isSubmitting = ref(false)
 const verificationResult = ref<any>(null)
 const currentStep = ref<number>(0)
+const rejectionCountdown = ref<number>(0)
+let rejectionTimerInterval: any = null
+
+const startRejectionCountdown = (seconds: number = 5) => {
+  if (rejectionTimerInterval) clearInterval(rejectionTimerInterval)
+  rejectionCountdown.value = seconds
+
+  rejectionTimerInterval = setInterval(async () => {
+    if (rejectionCountdown.value > 1) {
+      rejectionCountdown.value--
+    } else {
+      clearInterval(rejectionTimerInterval)
+      rejectionCountdown.value = 0
+      verificationResult.value = null
+      currentStep.value = 1
+      isSubmitting.value = false
+      await fetchTasks()
+      if (selectedTask.value) {
+        const updated = tasks.value.find(t => t.id === selectedTask.value?.id)
+        if (updated) {
+          selectedTask.value = updated
+        }
+      }
+    }
+  }, 1000)
+}
 
 // Live Claim Countdown Timer
 const claimSecondsRemaining = ref(0)
@@ -162,6 +189,7 @@ const startClaimCountdown = (expiresAtStr?: string, minutesWindow = 15) => {
 
 onUnmounted(() => {
   if (claimTimerInterval) clearInterval(claimTimerInterval)
+  if (rejectionTimerInterval) clearInterval(rejectionTimerInterval)
 })
 
 // Realtime WebSocket Listener: Auto-update on new data arrival without polling
@@ -382,12 +410,23 @@ const submitEvidence = async (
     setTimeout(() => {
       currentStep.value = 4
       verificationResult.value = data
-      if (selectedTask.value) {
-        selectedTask.value.status = data.status
-        selectedTask.value.payout_tx_sig = data.payout_tx_sig
+      
+      if (data.status === 'PAID') {
+        if (selectedTask.value) {
+          selectedTask.value.status = 'PAID'
+          selectedTask.value.payout_tx_sig = data.payout_tx_sig
+        }
+        isSubmitting.value = false
+        fetchTasks()
+        refreshProfile()
+      } else {
+        // REJECTION WORKFLOW:
+        // 1. Bounty remains safely locked in the Escrow Smart Contract.
+        // 2. The task in backend was reset to OPEN with failed_attempts incremented.
+        // 3. Keep the rejection verdict visible with 5-second countdown timer.
+        isSubmitting.value = false
+        startRejectionCountdown(5)
       }
-      isSubmitting.value = false
-      fetchTasks()
     }, 1800)
   } catch (err) {
     console.error(err)
@@ -398,28 +437,6 @@ const submitEvidence = async (
 const handleDossierSubmit = (payload: { photo: File; investigationLetter: string; sourceInfo: string; letterFile?: File }) => {
   showSensitiveDossierModal.value = false
   submitEvidence(undefined, payload.photo, payload.investigationLetter, payload.sourceInfo, payload.letterFile)
-}
-
-const triggerRefund = async () => {
-  if (!selectedTask.value) return
-  loading.value = true
-  try {
-    const res = await fetch(`/api/tasks/${selectedTask.value.id}/refund`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ poster_address: selectedTask.value.poster_address })
-    })
-    const data = await res.json()
-    if (res.ok) {
-      selectedTask.value.status = 'REFUNDED'
-      selectedTask.value.refund_tx_sig = data.refund_tx_sig
-      fetchTasks()
-    }
-  } catch (e) {
-    console.error(e)
-  } finally {
-    loading.value = false
-  }
 }
 
 const handleFileUpload = (e: Event) => {
@@ -681,11 +698,20 @@ onMounted(async () => {
               </button>
 
               <div class="space-y-1">
-                <span class="text-[12px] font-semibold text-[#5E5B53] uppercase">{{ selectedTask.category || 'General' }}</span>
+                <div class="flex items-center gap-2">
+                  <span class="text-[12px] font-semibold text-[#5E5B53] uppercase">{{ selectedTask.category || 'General' }}</span>
+                  <span 
+                    v-if="selectedTask.failed_attempts && selectedTask.failed_attempts > 0 && selectedTask.status === 'OPEN'"
+                    class="inline-flex items-center gap-1 text-[11px] font-semibold text-[#B42318] bg-[#FEF3F2] border border-[#FECDCA] px-2 py-0.5 rounded-full"
+                  >
+                    <AlertCircle class="w-3 h-3 text-[#B42318]" />
+                    <span>Failed {{ selectedTask.failed_attempts }}x &middot; Re-opened</span>
+                  </span>
+                </div>
                 <h1 class="text-[20px] font-semibold text-[#1A1A17] leading-tight">
                   {{ selectedTask.title }}
                 </h1>
-                <RewardLine :status="selectedTask.status" :amount="selectedTask.reward_sol" />
+                <RewardLine :status="selectedTask.status" :amount="selectedTask.reward_sol" :failedAttempts="selectedTask.failed_attempts" />
               </div>
 
               <!-- What to do & What photo should show -->
@@ -760,25 +786,54 @@ onMounted(async () => {
 
               <!-- Result verdict box -->
               <div v-if="verificationResult" class="pt-2">
+                <!-- Approved / Paid verdict -->
                 <div 
-                  class="p-3.5 rounded-[12px] text-[14px] space-y-1.5"
-                  :class="verificationResult.status === 'PAID' ? 'bg-[#EBF5EF] text-[#1E7B4F]' : 'bg-[#FAECEB] text-[#B42318]'"
+                  v-if="verificationResult.status === 'PAID'"
+                  class="p-3.5 rounded-[12px] text-[14px] space-y-1.5 bg-[#EBF5EF] text-[#1E7B4F]"
                 >
                   <div class="flex items-center gap-1.5 font-semibold">
-                    <CheckCircle2 v-if="verificationResult.status === 'PAID'" class="w-4 h-4" />
-                    <AlertCircle v-else class="w-4 h-4" />
-                    <span>{{ verificationResult.status === 'PAID' ? 'Paid' : 'Not approved' }}</span>
+                    <CheckCircle2 class="w-4 h-4" />
+                    <span>Reward Released</span>
                   </div>
-                  <p class="text-[13px] leading-snug">{{ verificationResult.verification.reason }}</p>
+                  <p class="text-[13px] leading-snug">{{ verificationResult.verification?.reason || 'Verified successfully' }}</p>
                 </div>
 
-                <div v-if="verificationResult.status === 'REJECTED' && selectedTask.status !== 'REFUNDED'" class="pt-2">
-                  <button 
-                    @click="triggerRefund"
-                    class="w-full py-2.5 rounded-[12px] bg-[#1A1A17] text-white text-[13px] font-medium"
-                  >
-                    Refund reward to poster
-                  </button>
+                <!-- Rejected verdict with 5-second countdown & locked escrow preservation -->
+                <div 
+                  v-else-if="verificationResult.status === 'REJECTED'"
+                  class="p-4 rounded-[12px] bg-[#FEF3F2] border border-[#FECDCA] text-[13px] space-y-2.5 text-left"
+                >
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-1.5 font-bold text-[#B42318] text-[14px]">
+                      <AlertCircle class="w-4 h-4 text-[#B42318]" />
+                      <span>Verification Rejected</span>
+                    </div>
+                    <span class="text-[12px] font-mono font-bold text-[#B42318] bg-[#FEE4E2] px-2 py-0.5 rounded-full">
+                      Reopening in {{ rejectionCountdown }}s
+                    </span>
+                  </div>
+
+                  <p class="text-[#7A271A] leading-relaxed text-[13px]">
+                    {{ verificationResult.verification?.reason || 'Submitted photo did not match the quest description.' }}
+                  </p>
+
+                  <div class="pt-2 border-t border-[#FECDCA] flex items-center justify-between text-[11px] text-[#912018]">
+                    <div class="flex items-center gap-1">
+                      <Shield class="w-3.5 h-3.5 text-[#B42318]" />
+                      <span>Reward remains locked in smart contract escrow</span>
+                    </div>
+                    <span class="font-semibold uppercase tracking-wider text-[#B42318]">
+                      Failed {{ verificationResult.failed_attempts || 1 }}x
+                    </span>
+                  </div>
+
+                  <!-- 5-second animated progress bar -->
+                  <div class="w-full bg-[#FECDCA] h-1.5 rounded-full overflow-hidden">
+                    <div 
+                      class="bg-[#D92D20] h-full transition-all duration-1000 ease-linear rounded-full"
+                      :style="{ width: `${(rejectionCountdown / 5) * 100}%` }"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1096,7 +1151,7 @@ onMounted(async () => {
               <div class="min-w-0 pr-4 space-y-1">
                 <div class="flex items-center gap-2">
                   <h3 class="font-medium text-[15px] text-[#1A1A17] truncate">{{ t.title }}</h3>
-                  <StatusWord :status="t.status" />
+                  <StatusWord :status="t.status" :failedAttempts="t.failed_attempts" />
                 </div>
                 <div class="flex items-center gap-2 text-[13px] text-[#5E5B53]">
                   <span>{{ t.category || 'General' }}</span>
@@ -1151,8 +1206,11 @@ onMounted(async () => {
 
           <div class="bg-white p-5 rounded-[12px] border border-[#E3DFD6] space-y-3">
             <div class="space-y-1">
-              <h2 class="text-[18px] font-semibold text-[#1A1A17] leading-snug">{{ activitySelectedTask.title }}</h2>
-              <RewardLine :status="activitySelectedTask.status" :amount="activitySelectedTask.reward_sol" />
+              <div class="flex items-center gap-2">
+                <h2 class="text-[18px] font-semibold text-[#1A1A17] leading-snug">{{ activitySelectedTask.title }}</h2>
+                <StatusWord :status="activitySelectedTask.status" :failedAttempts="activitySelectedTask.failed_attempts" />
+              </div>
+              <RewardLine :status="activitySelectedTask.status" :amount="activitySelectedTask.reward_sol" :failedAttempts="activitySelectedTask.failed_attempts" />
             </div>
 
             <div class="pt-2 border-t border-[#E3DFD6] space-y-2 text-[13px]">
@@ -1166,7 +1224,7 @@ onMounted(async () => {
               </div>
               <div class="flex justify-between items-center">
                 <span class="text-[#5E5B53]">Current Status</span>
-                <StatusWord :status="activitySelectedTask.status" />
+                <StatusWord :status="activitySelectedTask.status" :failedAttempts="activitySelectedTask.failed_attempts" />
               </div>
             </div>
           </div>

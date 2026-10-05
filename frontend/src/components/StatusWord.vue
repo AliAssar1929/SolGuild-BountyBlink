@@ -3,11 +3,21 @@ import { CheckCircle2, AlertCircle, RotateCcw, Clock } from 'lucide-vue-next'
 
 defineProps<{
   status: string
+  failedAttempts?: number
 }>()
 </script>
 
 <template>
   <span 
+    v-if="status === 'OPEN' && failedAttempts && failedAttempts > 0"
+    class="inline-flex items-center gap-1 text-[11px] font-semibold text-[#B42318] bg-[#FEF3F2] border border-[#FECDCA] px-1.5 py-0.5 rounded-[4px]"
+  >
+    <AlertCircle class="w-3 h-3 text-[#B42318]" />
+    <span>Failed {{ failedAttempts }}x</span>
+  </span>
+
+  <span 
+    v-else
     class="inline-flex items-center gap-1 text-[12px] font-medium"
     :class="{
       'text-[#1E7B4F]': status === 'PAID',

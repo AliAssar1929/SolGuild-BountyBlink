@@ -32,6 +32,7 @@ class Task(Base):
     payout_tx_sig = Column(String(88), nullable=True)
     refund_tx_sig = Column(String(88), nullable=True)
     active_claim_id = Column(String(36), nullable=True)
+    failed_attempts = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     expires_at = Column(DateTime, nullable=False)
 

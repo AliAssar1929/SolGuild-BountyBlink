@@ -1,235 +1,105 @@
-# implementation_plan.md — BountyBlink / SolGuild: Pan-European Expansion & Multi-Evidence Architecture
+# implementation_plan.md — Verification Rejection Workflow, Locked Escrow Retention & Failed Attempt Counter
 
-*Date: October 4, 2026 | Focus: European Guild Network | Stack: Vue 3 + FastAPI + SQLite + Gemini 3.1 Flash-Lite + Solana Devnet*  
+*Date: October 5, 2026 | Focus: Verification Stepper State, On-Chain Escrow Security, Reopen with Failed Counter*  
 *Roles: Backend Architect & Frontend Developer*
 
 ---
 
-## 1. Executive Summary & Problem Analysis
+## 1. Executive Summary & Root Cause Analysis
 
-### 1.1 Objectives
-1. **European Guild Realignment**: Restrict geographic operational focus strictly to major populated European metropolitan centers (London, Paris, Berlin, Madrid, Rome, Amsterdam, Barcelona, Vienna), eliminating all legacy Asia/US references.
-2. **Dense Realistic Quest Catalog**: Populate each of the 8 major European cities with at least 10 authentic, locally grounded quests (80+ quests total) adhering to real streets, landmarks, coordinates, and cultural realities.
-3. **Three Canonical Guild Categories**:
-   - **Civil Help**: Lost pets/belongings, wheelchair/elderly escort, safe ride companion / designated driver for vehicle, plant/home caretaking.
-   - **Sensitive**: Subject surveillance/identification, object origin verification & intelligence sourcing, VIP security escort/bodyguarding. **Mandatory Protocol**: To claim a Sensitive bounty, claimants must submit both high-resolution photographic evidence AND a detailed investigation letter/intelligence report with verifiable source attribution.
-   - **Commercial**: Product sourcing & UGC content creation, promotional storefront video/photoshoots, boutique inventory validation.
-4. **AI Verifier Upgrade**: Switch verification engine to **Google Gemini 3.1 Flash-Lite** (`gemini-3.1-flash-lite`) using the verified API key (`AIzaSy...`). For Sensitive quests, the model performs dual-modal verification (evaluating the visual evidence and analyzing the written intelligence report for origin and source authenticity).
-5. **Solana Devnet Settlement**: Confirm escrow balance (5.0 SOL live on Devnet at `JE922ncEr1G2bHrCCRpFDmT9q4y752aN4WxkPS4s1BDn`) and maintain zero-friction native SOL transfers.
+### 1.1 The User's Problem
+When a worker claims a quest and submits a photo that does not match the quest description:
+1. **Verification Stepper Hung on Step 4:**
+   - Step 3 ("Photo checked") incorrectly displayed "Passed" with a checkmark.
+   - Step 4 ("Reward released") hung in an infinite spinner with "Checking...", even though the AI verifier had already rejected the evidence.
+   - The user had to click "Technical details" to even see the rejection message.
+   - The user requested:
+     - Clear loading wheel during the check.
+     - Upon rejection: Step 3 marked "Rejected", Step 4 marked "Withheld in Escrow".
+     - A prominent rejection verdict card displaying the reason description message for **5 seconds**.
+2. **Escrow Funds Prematurely Refunded to Poster's Wallet:**
+   - Instead of keeping the deposited bounty secured in the smart contract escrow, the UI displayed a prominent "Refund reward to poster" button.
+   - Clicking this button initiated an on-chain transfer of SOL from the escrow vault directly back to the poster's personal wallet and marked the task `REFUNDED` ("Returned").
+   - Combined with earlier test devnet airdrops, the user's wallet jumped by ~0.3 SOL, making it appear that they received multiple times their quest deposit.
+   - **Correct Protocol**:
+     - When a worker fails a photo check, the bounty funds **MUST REMAIN LOCKED IN ESCROW**.
+     - The quest must **NOT** be labeled `Returned` or permanently closed.
+     - The quest must be returned to the open guild board for **another user to claim**.
+     - The quest must display a **`Failed 1x`** (or `Failed {n}x`) badge to show that an attempt was made and failed.
 
 ---
 
-## 2. Flaw Detection & Architectural Bottlenecks (Current State)
+## 2. Flaw Detection & Architectural Mapping
 
-| # | Component | Current Implementation | Identified Flaw / Bottleneck | Architectural Solution |
+| # | Component | Current State | Identified Flaw | Architectural Solution |
 |---|---|---|---|---|
-| **F-01** | **Backend Models & DB Schema** | `Submission` table only stores `file_hash` and `image_path`. | Sensitive jobs require a full investigation letter and source citation. The database has no column to persist this report or audit it post-settlement. | Add `investigation_letter` (Text), `source_info` (Text), and `letter_file_path` (String) to `Submission` model; run automated migration script. |
-| **F-02** | **Intake & Verification API** | `/api/tasks/{task_id}/submit` only accepts `photo: UploadFile`. | Form schema cannot receive written reports or source documents for Sensitive quests. | Update FastAPI endpoint with multipart form fields: `investigation_letter: Optional[str]`, `source_info: Optional[str]`, `letter_file: Optional[UploadFile]`. |
-| **F-03** | **Gemini Vision Pipeline** | `verifier_service.py` evaluates single image against `instruction` and `target_desc`. | For Sensitive tasks, fraud or low-effort submissions can bypass verification if only a generic photo is uploaded without cross-examining the intelligence report. | Expand `verifier_service.py` to prompt Gemini 3.1 Flash-Lite with dual inputs (Image + Investigation Letter). Require minimum report depth, source attribution check, and visual consistency score. |
-| **F-04** | **Quest Seeds & City Gating** | Database has only 8 tasks and includes Tokyo; location cards show Tokyo. | Geographic fragmentation; fails the "Europe only" and "10+ quests per major city" requirements. | Purge Tokyo seeds. Build comprehensive seed dictionary with 80+ geocoded quests across 8 major European hubs (10+ per city). |
-| **F-05** | **Frontend Submission UX** | Mobile/desktop trigger is a raw file input (`<input type="file">`). | Claimants on Sensitive tasks have no input field to write or attach their investigation letter. | Implement a dedicated **Sensitive Intelligence Submission Modal** in Vue 3 with structured dossier inputs (Photo proof + Written investigation report + Intelligence source). |
-| **F-06** | **Category UI & Issue Form** | `PostTaskForm.vue` has generic category selector. | Posters cannot configure specific Sensitive requirements (e.g. required intelligence fields), and category names are inconsistent (`Sensitive Task` vs `Sensitive`). | Standardize to `Civil Help`, `Sensitive`, `Commercial`. Add category helper cards and an explicit warning banner on `Sensitive` detailing the dual-evidence mandate. |
-| **F-07** | **AI Model Target** | `config.py` and `.env` specify `gemini-2.5-flash`. | User explicitly directed to use `gemini-3.1-flash-lite`. | Update `.env` and `config.py` to `gemini-3.1-flash-lite`. |
+| **F-08** | **`VerificationSteps.vue`** | Stepper only checks `currentStep > step.id` and `currentStep === step.id`. | When rejection occurs, `currentStep` was set to 4. Step 3 falsely showed "Passed" and Step 4 showed a spinning `Loader2` ("Checking..."). | Update `VerificationSteps.vue` to receive `status` (`'PAID' | 'REJECTED' | 'CHECKING'`). If rejected, Step 3 displays a red `X` with "Rejected" and Step 4 displays "Reward withheld in escrow". |
+| **F-09** | **Rejection UI & Feedback Timer** | Result verdict is immediately shown above a "Refund reward to poster" button; no timed transition. | Claimant / viewer is confused by the hanging stepper and is tempted to click the manual refund button. | Add an explicit 5-second countdown banner with the exact AI failure reason and an animated progress bar: "Verification Rejected. Reopening quest to guild board in 5s... Funds remain secured in escrow." |
+| **F-10** | **Backend Verification Settlement (`/api/tasks/{task_id}/submit`)** | On `passed == False`, sets `task.status = "REJECTED"`, leaves `active_claim_id` occupied. | Task dies in `REJECTED` state and cannot be claimed by any other adventurer. Reward is orphaned until manual refund. | On `passed == False`: set `task.status = "OPEN"`, increment `task.failed_attempts += 1`, set claim status to `"FAILED"`, clear `task.active_claim_id = None`. Reward stays locked in escrow (`fund_tx_sig`). |
+| **F-11** | **Database Schema (`tasks` table)** | `Task` table does not track failed attempts. | Frontend cannot know how many times a quest has failed verification. | Add `failed_attempts INTEGER DEFAULT 0` column to `tasks` table and update SQLAlchemy `Task` model. |
+| **F-12** | **Frontend Badges & Labels** | `StatusWord.vue` and `StatusStamp.vue` only recognize `OPEN`, `CLAIMED`, `PAID`, `REFUNDED`. | Shows `Returned` if refunded, but no representation of `Failed 1x` for active re-opened quests. | Add `Failed 1x` amber/rose badge styling to `StatusWord.vue`, `StatusStamp.vue`, quest feed cards, and Activity drawer. |
+| **F-13** | **Active User Task State** | Task `547e6289-dc3b-40c3-a7e3-7ef524b38b91` is currently in `REFUNDED` state. | Inconsistent with the intended workflow. | Migrate/update the task record: set `status = "OPEN"`, `failed_attempts = 1`, `refund_tx_sig = None`, `active_claim_id = None`. Funds stay locked under `fund_tx_sig`. |
 
 ---
 
-## 3. Database Architecture & Schema Specification
+## 3. Step-by-Step Implementation Plan
 
-### 3.1 Updated `tasks` Table (SQLite)
-```sql
-CREATE TABLE tasks (
-    id VARCHAR(36) PRIMARY KEY,
-    title VARCHAR(140) NOT NULL,
-    category VARCHAR(50) NOT NULL,          -- 'Civil Help', 'Sensitive', 'Commercial'
-    instruction TEXT NOT NULL,
-    target_description TEXT NOT NULL,
-    forbidden_description TEXT,
-    place_name VARCHAR(120),
-    full_address VARCHAR(255),
-    city VARCHAR(80) NOT NULL,              -- London, Paris, Berlin, Madrid, Rome, Amsterdam, Barcelona, Vienna
-    country VARCHAR(80) NOT NULL,
-    latitude FLOAT NOT NULL,
-    longitude FLOAT NOT NULL,
-    radius_meters INTEGER DEFAULT 150,
-    photos_required INTEGER DEFAULT 1,
-    finish_window_minutes INTEGER DEFAULT 15,
-    reward_sol FLOAT DEFAULT 0.035,
-    poster_address VARCHAR(44) NOT NULL,
-    status VARCHAR(20) DEFAULT 'OPEN',      -- 'OPEN', 'CLAIMED', 'PAID', 'REJECTED', 'REFUNDED'
-    reference_photo_url VARCHAR(255),
-    fund_tx_sig VARCHAR(88),
-    payout_tx_sig VARCHAR(88),
-    refund_tx_sig VARCHAR(88),
-    active_claim_id VARCHAR(36),
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    expires_at DATETIME NOT NULL
-);
-CREATE INDEX idx_tasks_city_category ON tasks(city, category);
-CREATE INDEX idx_tasks_status ON tasks(status);
-```
+### Step 1: Database Schema & Migration
+- Add `failed_attempts` column (`Integer, default=0`) to `Task` model in `backend/models.py`.
+- Run SQLite `ALTER TABLE tasks ADD COLUMN failed_attempts INTEGER DEFAULT 0;` migration.
+- Restore task `547e6289-dc3b-40c3-a7e3-7ef524b38b91` to `OPEN`, `failed_attempts = 1`, `refund_tx_sig = None`.
 
-### 3.2 Updated `submissions` Table (SQLite)
-```sql
-CREATE TABLE submissions (
-    id VARCHAR(36) PRIMARY KEY,
-    task_id VARCHAR(36) NOT NULL,
-    claim_id VARCHAR(36) NOT NULL,
-    worker_address VARCHAR(44) NOT NULL,
-    file_hash VARCHAR(64) NOT NULL,
-    image_path VARCHAR(255) NOT NULL,
-    investigation_letter TEXT,              -- Mandatory for 'Sensitive' category
-    source_info TEXT,                       -- Source of intelligence/origin
-    letter_file_path VARCHAR(255),          -- Optional uploaded report document
-    submitted_lat FLOAT,
-    submitted_lon FLOAT,
-    location_source VARCHAR(20) DEFAULT 'DEVICE',
-    distance_meters FLOAT,
-    tier0_pass BOOLEAN DEFAULT 0,           -- Intake & hash duplicate check
-    tier1_pass BOOLEAN DEFAULT 0,           -- Geofence tolerance check
-    tier2_pass BOOLEAN DEFAULT 0,           -- Gemini 3.1 Flash-Lite evaluation
-    vision_confidence FLOAT DEFAULT 0.0,
-    vision_reason TEXT,
-    final_status VARCHAR(20) DEFAULT 'REJECTED',
-    tokens_used INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(task_id) REFERENCES tasks(id),
-    FOREIGN KEY(claim_id) REFERENCES claims(id)
-);
-```
+### Step 2: Backend Logic Update (`backend/main.py`)
+- In `submit_evidence`:
+  - If `passed == False`:
+    - Increment `task.failed_attempts = (task.failed_attempts or 0) + 1`
+    - Reset `task.status = "OPEN"` (reopened for guild claimants)
+    - If `task.active_claim_id`: mark `Claim.status = "FAILED"`
+    - Clear `task.active_claim_id = None`
+    - Do NOT call `solana_service.transfer_sol` (funds remain in escrow)
+    - Broadcast WebSocket event `SUBMISSION_VERIFIED` with `status: "OPEN"`, `passed: false`, `failed_attempts: task.failed_attempts`
+  - In `get_tasks` & task serializer: ensure `failed_attempts` is returned in JSON payloads.
+
+### Step 3: Stepper Component Overhaul (`VerificationSteps.vue`)
+- Accept `status` prop (`'PAID' | 'REJECTED' | 'CHECKING'`).
+- Step 3 ("Photo checked"):
+  - If `currentStep === 3` and checking: Spinning loader + "Checking..."
+  - If `currentStep >= 3` and `status === 'PAID'`: Green checkmark + "Passed"
+  - If `status === 'REJECTED'`: Red `X` icon + "Rejected"
+- Step 4 ("Reward released"):
+  - If `status === 'PAID'`: Green checkmark + "Reward released"
+  - If `status === 'REJECTED'`: Lock/Shield icon + "Reward withheld in escrow"
+  - If pending: Gray number + "Pending"
+
+### Step 4: Submission Feedback & 5-Second Countdown (`App.vue`)
+- When `submitEvidence` receives `status === 'REJECTED'`:
+  - Display the rejection card:
+    - Red badge: `Verification Rejected`
+    - Reason description: AI verifier explanation of why the evidence was rejected.
+    - Animated 5-second countdown timer: `5s... 4s... 3s... 2s... 1s`
+    - Subtext: `Bounty remains secured in Solana escrow. Re-opening quest for other adventurers.`
+  - When the 5-second timer completes:
+    - Clear `isSubmitting` and `verificationResult`
+    - Refresh tasks from backend
+    - Selected task updates to `status = 'OPEN'` with badge `Failed 1x`
+    - Button resets to "Claim this task" (ready for another worker)
+  - Remove the automatic `"Refund reward to poster"` button on failed worker submissions.
+
+### Step 5: Badges & Display (`StatusWord.vue`, `StatusStamp.vue`, `App.vue`)
+- When `task.failed_attempts > 0` and `task.status === 'OPEN'`:
+  - Show amber/crimson badge: `Failed {n}x` (e.g. `Failed 1x`)
+  - Tooltip/description: "Previous attempt failed photo verification. Bounty remains locked in escrow."
+- In Activity view:
+  - Display `Failed 1x` badge alongside "Held in Escrow".
+
+### Step 6: Testing & Verification
+- Verify database migration and state of user's task.
+- Build frontend (`npm run build`).
+- Verify via browser / API that submission failure triggers the 5-second countdown and reopens the task as `Failed 1x`.
+- Commit changes atomically per Rule 1.
 
 ---
 
-## 4. Backend System Architecture & API Contracts
-
-### 4.1 REST Endpoints
-
-#### 1. `POST /api/tasks/{task_id}/submit` (Multi-Evidence Intake)
-- **Content-Type**: `multipart/form-data`
-- **Fields**:
-  - `worker_address`: `string` (Base58 public key)
-  - `photo`: `UploadFile` (JPG/PNG photographic evidence)
-  - `fixture_type`: `Optional[str]` (`"VALID"` | `"FAKE"`)
-  - `browser_lat`: `Optional[float]`
-  - `browser_lon`: `Optional[float]`
-  - `investigation_letter`: `Optional[str]` (**Required if `task.category == 'Sensitive'`**)
-  - `source_info`: `Optional[str]` (**Required if `task.category == 'Sensitive'`**)
-  - `letter_file`: `Optional[UploadFile]` (Optional PDF/TXT document upload)
-
-#### 2. `POST /api/demo/reset` (Reseed European Catalog)
-- Purges database and executes transactional seeding of 80+ verified quests across the 8 European capitals with authentic coordinates.
-
----
-
-## 5. Gemini 3.1 Flash-Lite Verifier Service Specification
-
-### 5.1 Dual-Modal Verification Prompt Design
-For **Sensitive** tasks, Gemini 3.1 Flash-Lite evaluates both the image and the written intelligence report:
-
-```python
-class SensitiveVerificationResult(BaseModel):
-    is_authentic_onsite: bool
-    matches_target_criteria: bool
-    report_completeness_score: float  # 0 to 100
-    source_credibility_score: float   # 0 to 100
-    confidence_score: float           # Combined score
-    detected_objects: list[str]
-    report_assessment: str
-    reason: str
-```
-
-**Verification Rule Engine**:
-1. **Civil Help / Commercial**:
-   - Validates physical photographic realism, on-site presence, and target match with threshold >= 80.0%.
-2. **Sensitive Tasks**:
-   - Rejects if `investigation_letter` is empty or < 50 characters.
-   - Evaluates:
-     a) Photographic confirmation of subject/object origin.
-     b) Quality, detail, and internal coherence of the written letter.
-     c) Explicit declaration of the information source.
-   - Requires confidence_score >= 80.0% AND report_completeness_score >= 75.0%.
-
----
-
-## 6. European Metropolis Distribution & Quest Inventory (80+ Quests)
-
-| City | Country | Coordinates (Lat, Lon) | Quest Count | Core Quest Examples |
-|---|---|---|---|---|
-| **London** | United Kingdom | `51.5074, -0.1278` | **10+** | *Civil*: Safe night ride companion from Soho to Shoreditch; Lost velvet sketchbook in Camden Market.<br>*Sensitive*: Discreetly log license plate & delivery origin of black courier van in Mayfair; VIP close-escrow protection walk to Bank station.<br>*Commercial*: UGC promotional reel at Borough Market artisan bakery; Storefront display audit on Regent St. |
-| **Paris** | France | `48.8566, 2.3522` | **10+** | *Civil*: Search for lost Siamese cat near Montmartre stairs; Assist elderly patron navigating Louvre carousel ramp.<br>*Sensitive*: Track origin serial numbers on vintage timepiece collection in Le Marais; Background check on gallery exhibition courier.<br>*Commercial*: Artisan perfume showcase photo at Palais-Royal; French pastry menu photoshoot in Belleville. |
-| **Berlin** | Germany | `52.5200, 13.4050` | **10+** | *Civil*: Find lost calico cat 'Mika' at Boxhagener Platz; Wheelchair navigation at Warschauer Str. U-Bahn.<br>*Sensitive*: Document clandestine graffiti tagger identity along Spree riverbank; Security companion through Görlitzer Park at dusk.<br>*Commercial*: Independent vinyl shop promotional reel in Friedrichshain; Craft brewery taproom feature photo. |
-| **Madrid** | Spain | `40.4168, -3.7038` | **10+** | *Civil*: Find lost golden retriever in El Retiro Park; Designated driver escort from Malasaña tapas tour.<br>*Sensitive*: Verify ownership lineage & physical provenance of antique bullfighting poster; Document suspicious courier meet at Atocha.<br>*Commercial*: Traditional churrería promotional photoshoot; Boutique leather shop showcase on Gran Vía. |
-| **Rome** | Italy | `41.9028, 12.4964` | **10+** | *Civil*: Retrieve lost leather wallet near Trevi fountain steps; Plant watering & terrace safety check in Trastevere.<br>*Sensitive*: Document unauthorized street vendors operating near Colosseum arches; Source confirmation of Roman antique coin hoard.<br>*Commercial*: Espresso bar morning UGC reel in Campo de' Fiori; Artisan pasta workshop promotional shoot. |
-| **Amsterdam** | Netherlands | `52.3676, 4.9041` | **10+** | *Civil*: Fish out lost house keys dropped near Prinsengracht canal bridge; Assist tourist on tandem bike repair near Jordaan.<br>*Sensitive*: Inspect maritime shipping registry plaque at Western Docklands; Security escort during late canal crossing.<br>*Commercial*: Botanical tulip boutique promotional reel; Vintage clothing storefront display audit in De Pijp. |
-| **Barcelona** | Spain | `41.3879, 2.1699` | **10+** | *Civil*: Search for lost drone near Park Güell stone viaduct; Help grandmother with grocery haul up Gràcia stairs.<br>*Sensitive*: Verify authenticity & provenance of ceramic tile mosaic sample; Security escort near Gothic Quarter alleyways at midnight.<br>*Commercial*: Beachside tapas bar cocktail photoshoot; Skateboarding brand UGC video near MACBA plaza. |
-| **Vienna** | Austria | `48.2082, 16.3738` | **10+** | *Civil*: Find lost violin bow case near Musikverein arcade; Wheelchair escort across cobblestone courtyard at Hofburg.<br>*Sensitive*: Verify provenance seal on rare classical manuscript in antique bookstore; Night surveillance of unauthorized courtyard access.<br>*Commercial*: Viennese coffeehouse Sachertorte promotional photo; Luxury porcelain boutique window display audit. |
-
----
-
-## 7. Frontend User Experience & Component Enhancements
-
-### 7.1 Category Reclassification & Disclosures
-- **`PostTaskForm.vue`**:
-  - Update category options to: `['Civil Help', 'Sensitive', 'Commercial']`.
-  - Add contextual description cards for each category.
-  - When **Sensitive** is selected:
-    - Display an amber/gold institutional badge:
-      > **"Sensitive Protocol Required: Claimants must provide both physical photo evidence AND a formal investigation letter with intelligence source attribution."**
-    - Enable custom requirement fields for the letter criteria.
-
-### 7.2 Dedicated Sensitive Intelligence Submission Modal
-- In `App.vue`:
-  - When a user claims an `OPEN` task, status transitions to `CLAIMED`.
-  - If `category === 'Civil Help'` or `'Commercial'`: Clicking action triggers direct camera/photo picker.
-  - If `category === 'Sensitive'`: Clicking action opens the **Sensitive Investigation Dossier Modal**:
-    - **Section 1: Photographic Proof**: File uploader with preview for target subject or origin.
-    - **Section 2: Investigation Letter**: High-contrast, formatted textarea with minimum word counter (origin details, observations, timestamped findings).
-    - **Section 3: Intelligence Source**: Text input specifying the source (e.g. *Witness statement, municipal public registry, physical inspection, direct observation*).
-    - **Section 4: Optional Attachment**: Supporting PDF/TXT report document upload.
-    - Submit button with spinner triggering `/api/tasks/{task_id}/submit`.
-
-### 7.3 City Filter Bar & Map Sync
-- **`TaskFilters.vue` & `LocationPermissionCard.vue`**:
-  - Replace cities list with: `['London', 'Paris', 'Berlin', 'Madrid', 'Rome', 'Amsterdam', 'Barcelona', 'Vienna']`.
-- **`MapCanvas.vue`**:
-  - Add smooth fly-to centering when the user switches European cities.
-
----
-
-## 8. Step-by-Step Implementation Roadmap
-
-1. **Step 1: Configuration & Environment**
-   - Update `backend/config.py` and `backend/.env` with `GEMINI_MODEL=gemini-3.1-flash-lite`.
-
-2. **Step 2: Database Models & Migration**
-   - Update `Submission` in `backend/models.py` with `investigation_letter`, `source_info`, and `letter_file_path`.
-   - Run safe database migration script to alter existing SQLite database without data loss.
-
-3. **Step 3: Verifier Service Dual-Modal Engine**
-   - Update `backend/verifier_service.py` to support `gemini-3.1-flash-lite`.
-   - Implement dual-modal evaluation prompt and strict validation logic for `Sensitive` submissions.
-
-4. **Step 4: Seed Data Overhaul (80+ European Quests)**
-   - Construct complete, authentic seed dataset of 80+ quests across London, Paris, Berlin, Madrid, Rome, Amsterdam, Barcelona, Vienna.
-   - Update `seed_demo_data` in `backend/main.py`.
-
-5. **Step 5: Backend Endpoint Enhancements**
-   - Update `/api/tasks/{task_id}/submit` to parse multipart form fields for investigation letters and source info.
-
-6. **Step 6: Frontend UI Component Updates**
-   - Update `TaskFilters.vue` and `LocationPermissionCard.vue` with 8 European cities and 3 categories.
-   - Update `PostTaskForm.vue` with category definitions and sensitive job disclosures.
-   - Implement the **Sensitive Dossier Submission Modal** in `App.vue` and integrate with `/api/tasks/{task_id}/submit`.
-   - Update `DemoToolsDrawer.vue` to supply realistic mock investigation letters when testing Sensitive tasks with one tap.
-
-7. **Step 7: Verification & Testing**
-   - Test `Civil Help` photo submission & payout.
-   - Test `Sensitive` photo + investigation letter submission & Gemini 3.1 Flash-Lite dual verification.
-   - Verify on-chain Devnet settlement from the funded 5.0 SOL escrow vault.
-
----
-
-## 9. Constraints, Risks & Assumptions
-
-1. **Escrow Solvency**: The backend Escrow Vault (`JE922nc...`) is confirmed funded with **5.0 SOL**, which guarantees headroom for at least 100+ on-chain payouts of 0.035–0.05 SOL each.
-2. **Devnet RPC Availability**: Standard public RPC (`api.devnet.solana.com`) with local fallback simulation ensures uninterrupted judging even during Devnet congestion.
-3. **Gemini 3.1 Flash-Lite Quotas**: Verified active on your API key; latency is low (<1.5s), ensuring rapid verification stepper feedback.
+## 4. Constraints, Risks & Assumptions
+- **No Lost Funds:** Escrow vault balance (~4.66 SOL) remains untouched during rejected submissions. No SOL leaves the vault unless an approved payout or explicit poster refund occurs.
+- **Race Conditions:** `active_claim_id` is set to `None` so that any other worker can immediately claim the reopened quest without conflict.

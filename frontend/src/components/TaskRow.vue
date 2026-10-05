@@ -11,6 +11,7 @@ const props = defineProps<{
     status: string
     latitude: number
     longitude: number
+    failed_attempts?: number
   }
   isSelected?: boolean
 }>()
@@ -33,7 +34,7 @@ const { getUsdValue } = useSolPrice()
         <h3 class="font-medium text-[15px] text-[#1A1A17] truncate leading-tight">
           {{ task.title }}
         </h3>
-        <StatusWord v-if="task.status !== 'OPEN'" :status="task.status" />
+        <StatusWord :status="task.status" :failedAttempts="task.failed_attempts" />
       </div>
       
       <p class="text-[13px] text-[#5E5B53] line-clamp-1 leading-snug">

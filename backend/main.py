@@ -374,7 +374,18 @@ async def submit_evidence(
             worker_user.total_earned_sol = (worker_user.total_earned_sol or 0.0) + task.reward_sol
             worker_user.last_active = datetime.datetime.utcnow()
     else:
-        task.status = "REJECTED"
+        # Verification failed: bounty reward remains securely locked in Escrow Smart Contract.
+        # Task returns to the open guild board for another adventurer to claim.
+        task.failed_attempts = (task.failed_attempts or 0) + 1
+        task.status = "OPEN"
+        if task.active_claim_id:
+            c = db.query(Claim).filter(Claim.id == task.active_claim_id).first()
+            if c:
+                c.status = "FAILED"
+        c_worker = db.query(Claim).filter(Claim.task_id == task.id, Claim.worker_address == worker_address).first()
+        if c_worker:
+            c_worker.status = "FAILED"
+        task.active_claim_id = None
 
     submission = Submission(
         id=str(uuid.uuid4()),
@@ -406,11 +417,14 @@ async def submit_evidence(
         "task_id": task.id,
         "status": task.status,
         "payout_tx_sig": payout_sig,
-        "passed": passed
+        "passed": passed,
+        "failed_attempts": task.failed_attempts
     })
 
     return {
-        "status": task.status,
+        "status": "PAID" if passed else "REJECTED",
+        "task_status": task.status,
+        "failed_attempts": task.failed_attempts,
         "verification": verification,
         "payout_tx_sig": payout_sig,
         "explorer_url": explorer_url
