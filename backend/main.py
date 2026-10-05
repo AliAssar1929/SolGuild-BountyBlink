@@ -498,8 +498,11 @@ async def refund_task(task_id: str, req: RefundTaskRequest, db: Session = Depend
         raise HTTPException(status_code=404, detail="Task not found")
     if task.status not in ["REJECTED", "OPEN"]:
         raise HTTPException(status_code=400, detail="Only REJECTED or expired OPEN tasks can be refunded")
+    if task.poster_address != req.poster_address:
+        raise HTTPException(status_code=403, detail="Only the quest issuer can request a refund")
 
-    success, sig, url = solana_service.transfer_sol(req.poster_address, task.reward_sol)
+    # Strictly transfer back to the genuine poster address recorded at quest creation
+    success, sig, url = solana_service.transfer_sol(task.poster_address, task.reward_sol)
     task.status = "REFUNDED"
     task.refund_tx_sig = sig
     db.commit()

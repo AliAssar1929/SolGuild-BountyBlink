@@ -2,7 +2,7 @@ import os
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    APP_NAME: str = "BountyBlink API"
+    APP_NAME: str = "SolGuild API"
     DEVNET_RPC_URLS: list[str] = [
         "https://api.devnet.solana.com",
         "https://rpc.ankr.com/solana_devnet",
@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     DEFAULT_REWARD_SOL: float = 0.01
     MAX_GEOFENCE_METERS: int = 150
     CLAIM_TIMEOUT_MINUTES: int = 10
-    GEMINI_API_KEY: str = "AIzaSyCUw6s9Urx9IEpHXNYInsyRY1KRvPYi0ik"
+    GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-3.1-flash-lite"
 
     class Config:

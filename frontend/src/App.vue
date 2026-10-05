@@ -201,24 +201,33 @@ useGuildSocket((event: GuildEvent) => {
   }
 })
 
+// Mobile Feed View Toggle (List vs Map)
+const mobileFeedView = ref<'list' | 'map'>('list')
+
 // Clean HTML5 History Routing (No # Hash)
 const syncRouteFromPath = () => {
-  // Support both clean pathname and legacy hash fallback
   let path = window.location.pathname
   if (window.location.hash) {
     path = window.location.hash.replace(/^#\/?/, '/')
   }
-  const parts = path.replace(/^\//, '').split('/')
+  const cleanPath = path.replace(/^\//, '')
+  const parts = cleanPath.split('/')
   const section = parts[0]
 
-  if (section === 'post' || section === 'issue') {
+  if (!section || section === 'landing') {
+    showLanding.value = true
+    selectedTask.value = null
+  } else if (section === 'post' || section === 'issue') {
+    showLanding.value = false
     currentTab.value = 'post'
     selectedTask.value = null
   } else if (section === 'activity') {
+    showLanding.value = false
     currentTab.value = 'activity'
     selectedTask.value = null
     fetchUserActivity()
   } else if (section === 'profile') {
+    showLanding.value = false
     if (!publicKey.value) {
       currentTab.value = 'feed'
       showWalletModal.value = true
@@ -227,15 +236,29 @@ const syncRouteFromPath = () => {
       selectedTask.value = null
     }
   } else if ((section === 'tasks' || section === 'quests') && parts[1]) {
+    showLanding.value = false
     currentTab.value = 'feed'
     const found = tasks.value.find(t => t.id === parts[1])
-    if (found) selectedTask.value = found
-  } else {
+    if (found) {
+      selectedTask.value = found
+      mobileFeedView.value = 'list'
+    }
+  } else if (section === 'tasks' || section === 'quests') {
+    showLanding.value = false
     currentTab.value = 'feed'
+  } else {
+    showLanding.value = true
   }
 }
 
+const navigateToLanding = () => {
+  showLanding.value = true
+  selectedTask.value = null
+  window.history.pushState({}, '', '/')
+}
+
 const navigateTo = (tab: 'feed' | 'post' | 'activity' | 'profile', taskId?: string) => {
+  showLanding.value = false
   if (tab === 'profile' && !publicKey.value) {
     showWalletModal.value = true
     return
@@ -296,6 +319,7 @@ const fetchTasks = async () => {
 
 const selectTask = (task: Task) => {
   selectedTask.value = task
+  mobileFeedView.value = 'list'
   verificationResult.value = null
   currentStep.value = 0
   if (task.status === 'CLAIMED') {
@@ -578,16 +602,20 @@ onMounted(async () => {
 </script>
 
 <template>
-  <LandingPage v-if="showLanding" @startApp="showLanding = false" />
+  <LandingPage 
+    v-if="showLanding" 
+    @startApp="navigateTo('feed')" 
+    @openPostQuest="navigateTo('post')" 
+  />
 
-  <div v-else class="h-screen w-screen flex flex-col bg-[#F7F5F0] text-[#1A1A17] overflow-hidden">
+  <div v-else class="h-dvh w-full flex flex-col bg-[#F7F5F0] text-[#1A1A17] overflow-hidden selection:bg-[#FFD60A] selection:text-[#1A1A17]">
     
     <!-- TOP BAR (SHARED FULL-WIDTH SHELL) -->
     <header class="h-14 bg-white border-b border-[#E3DFD6] px-4 md:px-6 flex items-center justify-between shrink-0 z-20">
       
       <!-- Brand & Tabs -->
       <div class="flex items-center gap-6">
-        <div class="flex items-center gap-2 cursor-pointer" @click="showLanding = true">
+        <div class="flex items-center gap-2 cursor-pointer select-none hover:opacity-85 transition-opacity" @click="navigateToLanding">
           <Shield class="w-5 h-5 text-[#1A1A17]" />
           <span class="font-bold text-[17px] tracking-tight">SolGuild</span>
           <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#FFD60A] text-[#1A1A17]">Devnet</span>
@@ -636,7 +664,7 @@ onMounted(async () => {
           class="h-8 px-3 rounded-[12px] bg-[#F7F5F0] hover:bg-[#EAE6DC] text-[#1A1A17] text-[13px] font-medium flex items-center gap-1.5 transition-colors"
         >
           <FlaskConical class="w-3.5 h-3.5" />
-          <span>Demo tools</span>
+          <span class="hidden sm:inline">Demo tools</span>
         </button>
 
         <button 
@@ -646,7 +674,7 @@ onMounted(async () => {
           title="Adventurer Guild License & Rank"
         >
           <Shield class="w-3.5 h-3.5 text-[#5E5B53]" />
-          <span>{{ userProfile?.name || 'License' }}</span>
+          <span class="hidden sm:inline">{{ userProfile?.name || 'License' }}</span>
           <span class="px-1.5 py-0.2 text-[10px] font-bold rounded bg-[#FFD60A] text-[#1A1A17]">
             {{ userProfile?.rank || 'F' }}
           </span>
@@ -682,8 +710,33 @@ onMounted(async () => {
       <!-- ================= TAB 1: FIND TASKS (MAP-FIRST APP) ================= -->
       <template v-if="currentTab === 'feed'">
         
+        <!-- Mobile Segmented View Toggle (List vs Map) -->
+        <div class="md:hidden flex items-center justify-center p-2 bg-white border-b border-[#E3DFD6] shrink-0 z-20">
+          <div class="flex items-center bg-[#F7F5F0] p-1 rounded-xl border border-[#E3DFD6] w-full max-w-xs text-xs font-semibold">
+            <button 
+              @click="mobileFeedView = 'list'"
+              class="flex-1 py-1.5 rounded-lg transition-all text-center"
+              :class="mobileFeedView === 'list' ? 'bg-[#1A1A17] text-[#FFD60A] shadow-xs' : 'text-[#5E5B53]'"
+            >
+              📋 Quest List ({{ tasks.length }})
+            </button>
+            <button 
+              @click="mobileFeedView = 'map'"
+              class="flex-1 py-1.5 rounded-lg transition-all text-center"
+              :class="mobileFeedView === 'map' ? 'bg-[#1A1A17] text-[#FFD60A] shadow-xs' : 'text-[#5E5B53]'"
+            >
+              🗺️ Map Explorer
+            </button>
+          </div>
+        </div>
+
         <!-- Left Panel (+20% width for location & filter breathing room) -->
-        <section class="w-full md:w-[550px] lg:w-[580px] xl:w-[600px] h-1/2 md:h-full bg-white md:border-r border-[#E3DFD6] flex flex-col shrink-0 z-10 shadow-xs order-2 md:order-1">
+        <section 
+          class="w-full md:w-[550px] lg:w-[580px] xl:w-[600px] bg-white md:border-r border-[#E3DFD6] flex flex-col shrink-0 z-10 shadow-xs"
+          :class="[
+            mobileFeedView === 'list' ? 'flex-1 md:h-full' : 'hidden md:flex md:h-full'
+          ]"
+        >
           
           <!-- DETAIL STATE IN LEFT PANEL -->
           <div v-if="selectedTask" class="h-full flex flex-col justify-between overflow-y-auto text-left">
@@ -950,7 +1003,12 @@ onMounted(async () => {
         </section>
 
         <!-- Full-bleed Map Canvas -->
-        <main class="flex-1 h-1/2 md:h-full relative order-1 md:order-2">
+        <main 
+          class="flex-1 relative"
+          :class="[
+            mobileFeedView === 'map' ? 'h-full flex-1' : 'hidden md:block md:h-full'
+          ]"
+        >
           <MapCanvas 
             :tasks="tasks" 
             :selectedTask="selectedTask" 
@@ -1288,41 +1346,45 @@ onMounted(async () => {
 
     <!-- Mobile Bottom Tab Bar -->
     <nav 
-      class="md:hidden h-14 bg-white border-t border-[#E3DFD6] grid shrink-0 z-20"
+      class="md:hidden h-16 bg-white border-t border-[#E3DFD6] grid shrink-0 z-30 pb-[env(safe-area-inset-bottom)] shadow-xs"
       :class="publicKey ? 'grid-cols-4' : 'grid-cols-3'"
     >
       <button 
         @click="navigateTo('feed')"
-        class="flex flex-col items-center justify-center text-[12px]"
-        :class="currentTab === 'feed' ? 'text-[#1A1A17] font-semibold' : 'text-[#5E5B53]'"
+        class="flex flex-col items-center justify-center text-[11px] gap-1 transition-colors active:bg-[#F7F5F0]"
+        :class="currentTab === 'feed' ? 'text-[#1A1A17] font-bold' : 'text-[#5E5B53] font-medium'"
       >
+        <Shield class="w-4 h-4" :class="currentTab === 'feed' ? 'text-[#1A1A17]' : 'text-[#5E5B53]'" />
         <span>Quests</span>
       </button>
 
       <button 
         @click="navigateTo('post')"
-        class="flex flex-col items-center justify-center text-[12px]"
-        :class="currentTab === 'post' ? 'text-[#1A1A17] font-semibold' : 'text-[#5E5B53]'"
+        class="flex flex-col items-center justify-center text-[11px] gap-1 transition-colors active:bg-[#F7F5F0]"
+        :class="currentTab === 'post' ? 'text-[#1A1A17] font-bold' : 'text-[#5E5B53] font-medium'"
       >
+        <Scroll class="w-4 h-4" :class="currentTab === 'post' ? 'text-[#1A1A17]' : 'text-[#5E5B53]'" />
         <span>Issue</span>
       </button>
 
       <button 
         @click="navigateTo('activity')"
-        class="flex flex-col items-center justify-center text-[12px]"
-        :class="currentTab === 'activity' ? 'text-[#1A1A17] font-semibold' : 'text-[#5E5B53]'"
+        class="flex flex-col items-center justify-center text-[11px] gap-1 transition-colors active:bg-[#F7F5F0]"
+        :class="currentTab === 'activity' ? 'text-[#1A1A17] font-bold' : 'text-[#5E5B53] font-medium'"
       >
+        <Clock class="w-4 h-4" :class="currentTab === 'activity' ? 'text-[#1A1A17]' : 'text-[#5E5B53]'" />
         <span>Activity</span>
       </button>
 
       <button 
         v-if="publicKey"
         @click="navigateTo('profile')"
-        class="flex flex-col items-center justify-center text-[12px] relative"
-        :class="currentTab === 'profile' ? 'text-[#1A1A17] font-semibold' : 'text-[#5E5B53]'"
+        class="flex flex-col items-center justify-center text-[11px] gap-1 relative transition-colors active:bg-[#F7F5F0]"
+        :class="currentTab === 'profile' ? 'text-[#1A1A17] font-bold' : 'text-[#5E5B53] font-medium'"
       >
+        <Shield class="w-4 h-4" :class="currentTab === 'profile' ? 'text-[#1A1A17]' : 'text-[#5E5B53]'" />
         <span>License</span>
-        <span v-if="userActivityData?.pending_approvals?.length" class="absolute top-2 right-4 w-2 h-2 rounded-full bg-[#FFD60A]"></span>
+        <span v-if="userActivityData?.pending_approvals?.length" class="absolute top-2 right-6 w-2 h-2 rounded-full bg-[#FFD60A]"></span>
       </button>
     </nav>
 

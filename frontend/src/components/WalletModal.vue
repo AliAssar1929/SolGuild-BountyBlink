@@ -20,7 +20,7 @@ const emit = defineEmits<{
 
 <template>
   <div v-if="isOpen" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/35 backdrop-blur-xs">
-    <div class="w-full max-w-md bg-white border border-[#E3DFD6] rounded-[16px] shadow-xl p-6 text-left space-y-5">
+    <div class="w-full max-w-md bg-white border border-[#E3DFD6] rounded-[16px] shadow-xl p-6 text-left space-y-5 max-h-[90dvh] overflow-y-auto">
       
       <div class="flex items-center justify-between border-b border-[#E3DFD6] pb-3">
         <div class="flex items-center gap-2">
@@ -41,7 +41,7 @@ const emit = defineEmits<{
           <div class="space-y-1">
             <span class="font-semibold block">Devnet Testing Environment</span>
             <p class="text-[#5E5B53] text-[12px] leading-relaxed">
-              BountyBlink executes on <strong>Solana Devnet</strong>. In your Phantom wallet:
+              SolGuild executes on <strong>Solana Devnet</strong>. In your Phantom wallet:
             </p>
             <ol class="list-decimal list-inside text-[12px] text-[#1A1A17] space-y-0.5 pt-0.5">
               <li>Open <strong>Settings</strong> &rarr; <strong>Developer Settings</strong></li>

@@ -82,7 +82,7 @@ const handleSubmit = () => {
 
 <template>
   <div v-if="isOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-    <div class="w-full max-w-xl bg-white border border-[#E3DFD6] rounded-[16px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-left">
+    <div class="w-full max-w-xl bg-white border border-[#E3DFD6] rounded-[16px] shadow-2xl overflow-hidden flex flex-col max-h-[90dvh] text-left">
       
       <!-- Header -->
       <div class="px-6 py-4 border-b border-[#E3DFD6] bg-[#F7F5F0] flex items-center justify-between shrink-0">
